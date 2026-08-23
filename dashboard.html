@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentinel NER — Landslide Early Warning</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0E1512;
+  --surface:#16211C;
+  --surface-2:#1C2A23;
+  --border:#28372F;
+  --text:#EBF1EC;
+  --text-muted:#8FA89B;
+  --text-faint:#5E7266;
+  --teal:#4FA88F;
+  --amber:#E0A94D;
+  --red:#D9654F;
+  --crimson:#B8362C;
+  --blue:#5B93B0;
+  --font-display:'Fraunces', serif;
+  --font-body:'IBM Plex Sans', sans-serif;
+  --font-mono:'IBM Plex Mono', monospace;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--font-body);
+  min-height:100vh;
+}
+.contour-bg{
+  position:fixed; inset:0; z-index:0; opacity:0.5; pointer-events:none;
+}
+.app{ position:relative; z-index:1; max-width:1320px; margin:0 auto; padding:20px 24px 60px; }
+
+/* ---------- Header ---------- */
+header{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 4px 20px; border-bottom:1px solid var(--border); margin-bottom:22px;
+  flex-wrap:wrap; gap:14px;
+}
+.brand{ display:flex; align-items:center; gap:12px; }
+.brand-mark{ width:38px; height:38px; flex-shrink:0; }
+.brand-text h1{
+  font-family:var(--font-display); font-weight:600; font-size:21px; letter-spacing:0.2px;
+}
+.brand-text p{ font-size:11.5px; color:var(--text-faint); letter-spacing:0.6px; text-transform:uppercase; margin-top:2px;}
+.header-right{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+
+.status-pill{
+  display:flex; align-items:center; gap:7px; font-family:var(--font-mono); font-size:11.5px;
+  padding:7px 12px; border-radius:20px; border:1px solid var(--border); background:var(--surface); color:var(--text-muted);
+  cursor:pointer; user-select:none; transition:border-color .15s;
+}
+.status-pill:hover{ border-color:var(--text-faint); }
+.status-dot{ width:7px; height:7px; border-radius:50%; background:var(--teal); box-shadow:0 0 0 3px rgba(79,168,143,0.18);}
+.status-pill.offline .status-dot{ background:var(--amber); box-shadow:0 0 0 3px rgba(224,169,77,0.18); animation:pulse 1.4s infinite;}
+@keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.4;} }
+
+.lang-toggle{ display:flex; border:1px solid var(--border); border-radius:20px; overflow:hidden; }
+.lang-toggle button{
+  font-family:var(--font-mono); font-size:11.5px; background:none; border:none; color:var(--text-faint);
+  padding:7px 11px; cursor:pointer; transition:background .15s, color .15s;
+}
+.lang-toggle button.active{ background:var(--surface-2); color:var(--text); }
+
+/* ---------- Layout ---------- */
+.grid{ display:grid; grid-template-columns: 1.55fr 1fr; gap:18px; }
+@media (max-width: 980px){ .grid{ grid-template-columns:1fr; } }
+
+.panel{
+  background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px 18px 20px;
+}
+.panel + .panel{ margin-top:18px; }
+.panel-head{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px; }
+.panel-head h2{ font-family:var(--font-display); font-weight:500; font-size:16.5px; }
+.panel-head .eyebrow{ font-family:var(--font-mono); font-size:10.5px; letter-spacing:0.8px; color:var(--text-faint); text-transform:uppercase; }
+
+/* ---------- Stat cards ---------- */
+/* ---------- Trip planner ---------- */
+#tripPanel{ margin-bottom:18px; border-color:#33463C; background:linear-gradient(180deg, var(--surface), var(--surface-2)); }
+.trip-hint{ font-family:var(--font-mono); font-size:10.5px; color:var(--text-faint); }
+.trip-controls{ display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; }
+.trip-field{ display:flex; flex-direction:column; gap:5px; min-width:150px; flex:1; }
+.trip-field label{ font-family:var(--font-mono); font-size:10px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-faint); }
+.trip-field select, .trip-field input{
+  background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:9px 10px;
+  font-family:var(--font-body); font-size:13px;
+}
+.trip-swap{ color:var(--text-faint); padding-bottom:9px; font-size:15px; }
+#tripCheckBtn{
+  background:var(--teal); color:#08150F; border:none; border-radius:8px; padding:10px 18px; font-weight:600;
+  font-size:13px; cursor:pointer; transition:opacity .15s; white-space:nowrap;
+}
+#tripCheckBtn:hover{ opacity:0.88; }
+.trip-result{ margin-top:18px; padding-top:16px; border-top:1px solid var(--border); }
+.trip-verdict{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+.trip-verdict .risk-badge{ font-size:12px; padding:5px 13px; }
+.trip-verdict p{ font-size:13px; color:var(--text-muted); line-height:1.5; }
+.trip-legs{ display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
+.trip-leg{ display:flex; align-items:center; gap:10px; font-size:12px; padding:9px 11px; background:var(--surface); border:1px solid var(--border); border-radius:9px; }
+.trip-leg .leg-dot{ width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.trip-leg .leg-name{ color:var(--text); flex:1; }
+.trip-leg .leg-status{ color:var(--text-faint); font-family:var(--font-mono); font-size:10.5px; }
+.trip-footer{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+.trip-weather{ font-size:11.5px; color:var(--blue); font-family:var(--font-mono); }
+.trip-subscribe{ display:flex; align-items:center; gap:7px; font-size:11.5px; color:var(--text-muted); cursor:pointer; }
+.trip-subscribe input{ accent-color:var(--teal); }
+
+.stats-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px;}
+@media (max-width:700px){ .stats-row{ grid-template-columns:repeat(2,1fr);} }
+.stat-card{
+  background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 15px;
+  position:relative; overflow:hidden;
+}
+.stat-card .num{ font-family:var(--font-display); font-size:28px; font-weight:600; line-height:1; }
+.stat-card .label{ font-size:11.5px; color:var(--text-muted); margin-top:6px; }
+.stat-card.critical .num{ color:var(--crimson); }
+.stat-card.high .num{ color:var(--red); }
+.stat-card.roads .num{ color:var(--amber); }
+.stat-card.sensors .num{ color:var(--teal); }
+
+/* ---------- Map ---------- */
+.map-wrap{ position:relative; }
+.map-legend{ display:flex; gap:14px; margin-top:12px; flex-wrap:wrap; }
+.legend-item{ display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--text-muted); font-family:var(--font-mono); }
+.legend-dot{ width:9px; height:9px; border-radius:3px; }
+.zone{ cursor:pointer; transition:opacity .15s; }
+.zone:hover{ opacity:0.82; }
+.zone-label{ font-family:var(--font-mono); font-size:9.5px; fill:var(--text); pointer-events:none; }
+.zone.selected-ring{ filter:drop-shadow(0 0 4px rgba(255,255,255,0.35)); }
+
+/* ---------- District table ---------- */
+table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+th{ text-align:left; font-family:var(--font-mono); font-size:10.5px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-faint); padding:0 8px 8px; font-weight:500; border-bottom:1px solid var(--border);}
+td{ padding:9px 8px; border-bottom:1px solid var(--border); color:var(--text-muted); vertical-align:middle; }
+tr.district-row{ cursor:pointer; transition:background .12s; }
+tr.district-row:hover{ background:var(--surface-2); }
+tr.district-row.active{ background:var(--surface-2); }
+td.dname{ color:var(--text); font-weight:500; }
+.risk-badge{
+  display:inline-block; padding:3px 9px; border-radius:20px; font-family:var(--font-mono); font-size:10.5px;
+  letter-spacing:0.3px; text-transform:uppercase;
+}
+.risk-badge.low{ background:rgba(79,168,143,0.15); color:var(--teal); }
+.risk-badge.moderate{ background:rgba(224,169,77,0.15); color:var(--amber); }
+.risk-badge.high{ background:rgba(217,101,79,0.15); color:var(--red); }
+.risk-badge.critical{ background:rgba(184,54,44,0.22); color:#F0857A; }
+.bar-track{ width:52px; height:5px; background:var(--surface-2); border-radius:3px; overflow:hidden; display:inline-block; vertical-align:middle; margin-right:6px;}
+.bar-fill{ height:100%; border-radius:3px; }
+
+/* ---------- Forecast chart ---------- */
+.chart-tabs{ display:flex; gap:6px; margin-bottom:2px; }
+.chart-tabs button{
+  font-family:var(--font-mono); font-size:10.5px; background:var(--surface-2); border:1px solid var(--border);
+  color:var(--text-faint); padding:5px 10px; border-radius:8px; cursor:pointer;
+}
+.chart-tabs button.active{ color:var(--text); border-color:var(--text-faint); }
+
+/* ---------- Alerts feed ---------- */
+.alert-item{
+  border-bottom:1px solid var(--border); padding:11px 0; display:flex; gap:10px; align-items:flex-start;
+}
+.alert-item:last-child{ border-bottom:none; }
+.alert-sev{ width:8px; height:8px; border-radius:50%; margin-top:5px; flex-shrink:0;}
+.alert-sev.high{ background:var(--red); }
+.alert-sev.critical{ background:var(--crimson); box-shadow:0 0 0 3px rgba(184,54,44,0.2);}
+.alert-body p.msg{ font-size:12.5px; color:var(--text); line-height:1.45; }
+.alert-body p.meta{ font-size:10.5px; color:var(--text-faint); font-family:var(--font-mono); margin-top:3px; }
+.simulate-btn{
+  width:100%; margin-top:12px; background:var(--surface-2); border:1px dashed var(--border); color:var(--text-muted);
+  font-family:var(--font-mono); font-size:11.5px; padding:9px; border-radius:9px; cursor:pointer; transition:all .15s;
+}
+.simulate-btn:hover{ border-color:var(--red); color:var(--red); }
+
+/* ---------- Field reports ---------- */
+.report-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+@media (max-width:700px){ .report-grid{ grid-template-columns:repeat(2,1fr);} }
+.report-card{ border:1px solid var(--border); border-radius:10px; overflow:hidden; background:var(--surface-2); }
+.report-thumb{ height:74px; position:relative; }
+.report-info{ padding:8px 9px 10px; }
+.report-info .place{ font-size:11px; color:var(--text); font-weight:500; }
+.report-info .time{ font-size:9.5px; color:var(--text-faint); font-family:var(--font-mono); margin-top:2px;}
+.report-status{ position:absolute; top:6px; right:6px; font-family:var(--font-mono); font-size:8.5px; padding:2px 6px; border-radius:10px; text-transform:uppercase; letter-spacing:0.4px;}
+.report-status.verified{ background:rgba(79,168,143,0.85); color:#08150F;}
+.report-status.pending{ background:rgba(224,169,77,0.85); color:#241804;}
+
+footer{ margin-top:26px; padding-top:16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+.data-badges{ display:flex; gap:8px; flex-wrap:wrap; }
+.data-badges span{ font-family:var(--font-mono); font-size:10px; color:var(--text-faint); border:1px solid var(--border); padding:4px 9px; border-radius:8px;}
+footer .note{ font-size:10.5px; color:var(--text-faint); max-width:520px; line-height:1.5;}
+
+.toast{
+  position:fixed; bottom:22px; right:22px; background:var(--surface); border:1px solid var(--crimson); border-radius:10px;
+  padding:12px 16px; font-size:12px; max-width:300px; box-shadow:0 8px 24px rgba(0,0,0,0.4); z-index:50;
+  transform:translateY(20px); opacity:0; transition:all .3s ease;
+}
+.toast.show{ transform:translateY(0); opacity:1; }
+</style>
+</head>
+<body>
+
+<svg class="contour-bg" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <pattern id="contours" width="180" height="180" patternUnits="userSpaceOnUse">
+      <path d="M0,90 Q45,40 90,90 T180,90" fill="none" stroke="#1D2A23" stroke-width="1"/>
+      <path d="M0,60 Q45,10 90,60 T180,60" fill="none" stroke="#1A2521" stroke-width="1"/>
+      <path d="M0,120 Q45,70 90,120 T180,120" fill="none" stroke="#1A2521" stroke-width="1"/>
+      <path d="M0,150 Q45,100 90,150 T180,150" fill="none" stroke="#161F1B" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#contours)"/>
+</svg>
+
+<div class="app">
+
+  <header>
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 40 40" fill="none">
+        <path d="M4 30 L14 12 L20 22 L26 8 L36 30 Z" fill="none" stroke="#4FA88F" stroke-width="2" stroke-linejoin="round"/>
+        <circle cx="26" cy="8" r="2.2" fill="#D9654F"/>
+        <path d="M4 34 Q20 30 36 34" stroke="#28372F" stroke-width="1.4" fill="none"/>
+      </svg>
+      <div class="brand-text">
+        <h1 data-i18n="brand_title">Sentinel NER</h1>
+        <p data-i18n="brand_sub">Landslide Early Warning &amp; Risk Monitoring</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="lang-toggle">
+        <button data-lang="en" class="active">EN</button>
+        <button data-lang="as">অস</button>
+        <button data-lang="hi">हि</button>
+      </div>
+      <div class="status-pill" id="connPill">
+        <span class="status-dot"></span>
+        <span id="connLabel" data-i18n="conn_online">Live — synced</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="stats-row">
+    <div class="stat-card critical">
+      <div class="num" id="statCritical">1</div>
+      <div class="label" data-i18n="stat_critical">Critical zones</div>
+    </div>
+    <div class="stat-card high">
+      <div class="num" id="statHigh">2</div>
+      <div class="label" data-i18n="stat_high">High-risk zones</div>
+    </div>
+    <div class="stat-card roads">
+      <div class="num">3</div>
+      <div class="label" data-i18n="stat_roads">Roads flagged / blocked</div>
+    </div>
+    <div class="stat-card sensors">
+      <div class="num">142</div>
+      <div class="label" data-i18n="stat_sensors">Sensors reporting</div>
+    </div>
+  </div>
+
+  <div class="panel" id="tripPanel">
+    <div class="panel-head">
+      <div>
+        <div class="eyebrow" data-i18n="trip_eyebrow">Tourist advisory</div>
+        <h2 data-i18n="trip_title">Plan your journey</h2>
+      </div>
+      <span class="trip-hint" data-i18n="trip_hint">Same live risk data, read for travelers</span>
+    </div>
+
+    <div class="trip-controls">
+      <div class="trip-field">
+        <label data-i18n="trip_from">From</label>
+        <select id="tripFrom"></select>
+      </div>
+      <div class="trip-swap">⇄</div>
+      <div class="trip-field">
+        <label data-i18n="trip_to">To</label>
+        <select id="tripTo"></select>
+      </div>
+      <div class="trip-field">
+        <label data-i18n="trip_date">Travel date</label>
+        <input type="date" id="tripDate">
+      </div>
+      <button id="tripCheckBtn" data-i18n="trip_check">Check route</button>
+    </div>
+
+    <div id="tripResult" class="trip-result" style="display:none;">
+      <div class="trip-verdict">
+        <span class="risk-badge" id="tripBadge"></span>
+        <p id="tripAdvisory"></p>
+      </div>
+      <div class="trip-legs" id="tripLegs"></div>
+      <div class="trip-footer">
+        <span id="tripWeather" class="trip-weather"></span>
+        <label class="trip-subscribe">
+          <input type="checkbox" id="tripSubscribe">
+          <span data-i18n="trip_subscribe">Get SMS/app alert if this route's risk changes</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- LEFT COLUMN -->
+    <div>
+      <div class="panel map-wrap">
+        <div class="panel-head">
+          <div>
+            <div class="eyebrow" data-i18n="map_eyebrow">GIS Risk Heatmap</div>
+            <h2 data-i18n="map_title">North Eastern Region — live zones</h2>
+          </div>
+        </div>
+        <svg id="map" viewBox="0 0 460 420" style="width:100%; height:auto;"></svg>
+        <div class="map-legend">
+          <div class="legend-item"><span class="legend-dot" style="background:#4FA88F"></span><span data-i18n="leg_low">Low</span></div>
+          <div class="legend-item"><span class="legend-dot" style="background:#E0A94D"></span><span data-i18n="leg_mod">Moderate</span></div>
+          <div class="legend-item"><span class="legend-dot" style="background:#D9654F"></span><span data-i18n="leg_high">High</span></div>
+          <div class="legend-item"><span class="legend-dot" style="background:#B8362C"></span><span data-i18n="leg_crit">Critical</span></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="eyebrow" data-i18n="tbl_eyebrow">District detail</div>
+            <h2 data-i18n="tbl_title">Risk by zone</h2>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th data-i18n="th_zone">Zone</th>
+              <th data-i18n="th_rain">72h rain</th>
+              <th data-i18n="th_soil">Soil moist.</th>
+              <th data-i18n="th_risk">Risk</th>
+              <th data-i18n="th_road">Roads</th>
+            </tr>
+          </thead>
+          <tbody id="districtTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div>
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="eyebrow" data-i18n="chart_eyebrow">Weather-linked forecast</div>
+            <h2 id="chartTitle">East Khasi Hills — 7 day</h2>
+          </div>
+        </div>
+        <svg id="chart" viewBox="0 0 400 150" style="width:100%; height:130px;"></svg>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="eyebrow" data-i18n="alerts_eyebrow">Alert &amp; notification engine</div>
+            <h2 data-i18n="alerts_title">Recent dispatches</h2>
+          </div>
+        </div>
+        <div id="alertFeed"></div>
+        <button class="simulate-btn" id="simulateBtn" data-i18n="btn_simulate">▲ Simulate rainfall spike (demo)</button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="eyebrow" data-i18n="reports_eyebrow">Field reporting</div>
+            <h2 data-i18n="reports_title">Citizen &amp; field-officer uploads</h2>
+          </div>
+        </div>
+        <div class="report-grid" id="reportGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="data-badges">
+      <span>IMD Weather API</span>
+      <span>ISRO Bhuvan / SAR</span>
+      <span>Field IoT · MQTT</span>
+      <span>Survey of India DEM</span>
+    </div>
+    <p class="note" data-i18n="footer_note">Prototype interface — risk values are simulated for demonstration. Production system connects live IMD, satellite, and field-sensor feeds as described in the architecture document.</p>
+  </footer>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------------- i18n ---------------- */
+const I18N = {
+  en: {
+    brand_sub:"Landslide Early Warning & Risk Monitoring", conn_online:"Live — synced", conn_offline:"Offline — 4 reports queued",
+    stat_critical:"Critical zones", stat_high:"High-risk zones", stat_roads:"Roads flagged / blocked", stat_sensors:"Sensors reporting",
+    map_eyebrow:"GIS Risk Heatmap", map_title:"North Eastern Region — live zones",
+    leg_low:"Low", leg_mod:"Moderate", leg_high:"High", leg_crit:"Critical",
+    tbl_eyebrow:"District detail", tbl_title:"Risk by zone",
+    th_zone:"Zone", th_rain:"72h rain", th_soil:"Soil moist.", th_risk:"Risk", th_road:"Roads",
+    chart_eyebrow:"Weather-linked forecast",
+    alerts_eyebrow:"Alert & notification engine", alerts_title:"Recent dispatches",
+    btn_simulate:"▲ Simulate rainfall spike (demo)",
+    reports_eyebrow:"Field reporting", reports_title:"Citizen & field-officer uploads",
+    footer_note:"Prototype interface — risk values are simulated for demonstration. Production system connects live IMD, satellite, and field-sensor feeds as described in the architecture document.",
+    road_clear:"Clear", road_partial:"Partial", road_blocked:"Blocked",
+    trip_eyebrow:"Tourist advisory", trip_title:"Plan your journey", trip_hint:"Same live risk data, read for travelers",
+    trip_from:"From", trip_to:"To", trip_date:"Travel date", trip_check:"Check route",
+    trip_subscribe:"Get SMS/app alert if this route's risk changes",
+    verdict_SAFE_TO_TRAVEL:"Safe to travel", verdict_TRAVEL_WITH_CAUTION:"Travel with caution",
+    verdict_AVOID_UNLESS_NECESSARY:"Avoid unless necessary", verdict_AVOID_ROUTE:"Avoid this route",
+    subscribed_msg:"You'll get an SMS/app alert if risk changes on this route before or during your trip.",
+  },
+  as: {
+    brand_sub:"ভূমিস্খলন সতৰ্কীকৰণ আৰু নিৰীক্ষণ", conn_online:"লাইভ — ছিংক হৈছে", conn_offline:"অফলাইন — ৪খন প্ৰতিবেদন বাকী",
+    stat_critical:"সংকটপূৰ্ণ স্থান", stat_high:"উচ্চ-বিপদ স্থান", stat_roads:"পথ প্ৰভাৱিত", stat_sensors:"সক্ৰিয় ছেন্সৰ",
+    map_eyebrow:"জিআইএছ বিপদ মানচিত্ৰ", map_title:"উত্তৰ পূৰ্বাঞ্চল — লাইভ স্থান",
+    leg_low:"কম", leg_mod:"মধ্যম", leg_high:"উচ্চ", leg_crit:"সংকটপূৰ্ণ",
+    tbl_eyebrow:"জিলা বিৱৰণ", tbl_title:"স্থান অনুসৰি বিপদ",
+    th_zone:"স্থান", th_rain:"৭২ঘ. বৰষুণ", th_soil:"মাটিৰ আৰ্দ্ৰতা", th_risk:"বিপদ", th_road:"পথ",
+    chart_eyebrow:"বতৰ-সংযুক্ত পূৰ্বানুমান",
+    alerts_eyebrow:"সতৰ্কবাণী ব্যৱস্থা", alerts_title:"শেহতীয়া সতৰ্কবাণী",
+    btn_simulate:"▲ বৰষুণ বৃদ্ধি অনুকৰণ কৰক",
+    reports_eyebrow:"ক্ষেত্ৰ প্ৰতিবেদন", reports_title:"নাগৰিক আৰু বিষয়াৰ আপলোড",
+    footer_note:"প্ৰ'ট'টাইপ ইণ্টাৰফেচ — মান অনুকৰণ কৰা। প্ৰকৃত ব্যৱস্থা IMD, উপগ্ৰহ আৰু ছেন্সৰ ফীডৰ সৈতে সংযুক্ত হ'ব।",
+    road_clear:"মুক্ত", road_partial:"আংশিক", road_blocked:"অৱৰুদ্ধ",
+    trip_eyebrow:"পৰ্যটক পৰামৰ্শ", trip_title:"আপোনাৰ যাত্ৰাৰ পৰিকল্পনা কৰক", trip_hint:"একে লাইভ তথ্য, ভ্ৰমণকাৰীৰ বাবে",
+    trip_from:"ৰ পৰা", trip_to:"লৈ", trip_date:"যাত্ৰাৰ তাৰিখ", trip_check:"পথ পৰীক্ষা কৰক",
+    trip_subscribe:"এই পথৰ বিপদ সলনি হ'লে SMS/এপ্ সতৰ্কবাণী পাওক",
+    verdict_SAFE_TO_TRAVEL:"যাত্ৰাৰ বাবে সুৰক্ষিত", verdict_TRAVEL_WITH_CAUTION:"সাৱধানে যাত্ৰা কৰক",
+    verdict_AVOID_UNLESS_NECESSARY:"অপ্ৰয়োজনীয় হ'লে এৰাই চলক", verdict_AVOID_ROUTE:"এই পথ এৰাই চলক",
+    subscribed_msg:"বিপদ সলনি হ'লে আপুনি SMS/এপ্ সতৰ্কবাণী পাব।",
+  },
+  hi: {
+    brand_sub:"भूस्खलन पूर्व चेतावनी और निगरानी प्रणाली", conn_online:"लाइव — सिंक हो गया", conn_offline:"ऑफ़लाइन — 4 रिपोर्ट लंबित",
+    stat_critical:"अति-जोखिम क्षेत्र", stat_high:"उच्च-जोखिम क्षेत्र", stat_roads:"प्रभावित सड़कें", stat_sensors:"सक्रिय सेंसर",
+    map_eyebrow:"जीआईएस जोखिम मानचित्र", map_title:"पूर्वोत्तर क्षेत्र — लाइव क्षेत्र",
+    leg_low:"कम", leg_mod:"मध्यम", leg_high:"उच्च", leg_crit:"अति-जोखिम",
+    tbl_eyebrow:"जिला विवरण", tbl_title:"क्षेत्रवार जोखिम",
+    th_zone:"क्षेत्र", th_rain:"72घं. वर्षा", th_soil:"मृदा नमी", th_risk:"जोखिम", th_road:"सड़कें",
+    chart_eyebrow:"मौसम-संबद्ध पूर्वानुमान",
+    alerts_eyebrow:"चेतावनी प्रणाली", alerts_title:"हाल की चेतावनियाँ",
+    btn_simulate:"▲ वर्षा वृद्धि का अनुकरण करें",
+    reports_eyebrow:"क्षेत्र रिपोर्टिंग", reports_title:"नागरिक व अधिकारी अपलोड",
+    footer_note:"प्रोटोटाइप इंटरफ़ेस — मान प्रदर्शन हेतु अनुकरणित हैं। वास्तविक प्रणाली IMD, उपग्रह व सेंसर फ़ीड से जुड़ेगी।",
+    road_clear:"साफ़", road_partial:"आंशिक", road_blocked:"अवरुद्ध",
+    trip_eyebrow:"पर्यटक परामर्श", trip_title:"अपनी यात्रा की योजना बनाएं", trip_hint:"वही लाइव डेटा, यात्रियों के लिए",
+    trip_from:"कहाँ से", trip_to:"कहाँ तक", trip_date:"यात्रा तिथि", trip_check:"मार्ग जाँचें",
+    trip_subscribe:"मार्ग का जोखिम बदलने पर SMS/ऐप चेतावनी पाएं",
+    verdict_SAFE_TO_TRAVEL:"यात्रा के लिए सुरक्षित", verdict_TRAVEL_WITH_CAUTION:"सावधानी से यात्रा करें",
+    verdict_AVOID_UNLESS_NECESSARY:"अनावश्यक हो तो टालें", verdict_AVOID_ROUTE:"यह मार्ग टालें",
+    subscribed_msg:"जोखिम बदलने पर आपको SMS/ऐप चेतावनी मिलेगी।",
+  }
+};
+let currentLang = 'en';
+function applyI18n(){
+  const dict = I18N[currentLang];
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const key = el.getAttribute('data-i18n');
+    if(dict[key]) el.textContent = dict[key];
+  });
+  document.getElementById('connLabel').textContent = isOffline ? dict.conn_offline : dict.conn_online;
+  renderTable(); renderReports(); renderAlerts();
+  populateTripSelects();
+  if(lastTripResult) renderTripResult(lastTripResult);
+}
+document.querySelectorAll('.lang-toggle button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.lang-toggle button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentLang = btn.dataset.lang;
+    applyI18n();
+  });
+});
+
+/* ---------------- Data ---------------- */
+const RISK_COLOR = { low:'#4FA88F', moderate:'#E0A94D', high:'#D9654F', critical:'#B8362C' };
+const districts = [
+  { id:'sik', name:'North Sikkim', x:60,  y:48,  r:26, risk:'high', rain:172, soil:61, slope:33, road:'partial' },
+  { id:'arp', name:'Upper Siang, Arunachal Pradesh', x:300, y:58, r:30, risk:'moderate', rain:140, soil:52, slope:29, road:'partial' },
+  { id:'asm', name:'Dima Hasao, Assam', x:230, y:175, r:30, risk:'high', rain:231, soil:70, slope:31, road:'blocked' },
+  { id:'meg', name:'East Khasi Hills, Meghalaya', x:130, y:225, r:32, risk:'critical', rain:284, soil:82, slope:41, road:'blocked' },
+  { id:'nag', name:'Kohima, Nagaland', x:330, y:220, r:26, risk:'moderate', rain:118, soil:48, slope:26, road:'clear' },
+  { id:'man', name:'Ukhrul, Manipur', x:320, y:300, r:24, risk:'low', rain:64, soil:35, slope:19, road:'clear' },
+  { id:'miz', name:'Aizawl, Mizoram', x:210, y:345, r:24, risk:'low', rain:58, soil:38, slope:15, road:'clear' },
+  { id:'tri', name:'Dhalai, Tripura', x:95,  y:320, r:24, risk:'moderate', rain:132, soil:50, slope:22, road:'partial' },
+];
+let selectedDistrict = districts.find(d=>d.id==='meg');
+let isOffline = false;
+
+/* ---------------- Map render ---------------- */
+function renderMap(){
+  const svg = document.getElementById('map');
+  svg.innerHTML = '';
+  districts.forEach(d=>{
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('class','zone' + (selectedDistrict.id===d.id ? ' selected-ring':''));
+    g.addEventListener('click', ()=>{ selectedDistrict = d; renderMap(); renderTable(); renderChart(); });
+
+    const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    circle.setAttribute('cx', d.x); circle.setAttribute('cy', d.y); circle.setAttribute('r', d.r);
+    circle.setAttribute('fill', RISK_COLOR[d.risk]);
+    circle.setAttribute('fill-opacity', d.risk==='critical' ? 0.55 : 0.32);
+    circle.setAttribute('stroke', RISK_COLOR[d.risk]);
+    circle.setAttribute('stroke-width', selectedDistrict.id===d.id ? 2.4 : 1.4);
+    g.appendChild(circle);
+
+    if(d.risk === 'critical'){
+      const pulse = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      pulse.setAttribute('cx', d.x); pulse.setAttribute('cy', d.y); pulse.setAttribute('r', d.r);
+      pulse.setAttribute('fill','none'); pulse.setAttribute('stroke', RISK_COLOR[d.risk]); pulse.setAttribute('stroke-width','1.5');
+      pulse.innerHTML = `<animate attributeName="r" from="${d.r}" to="${d.r+14}" dur="1.6s" repeatCount="indefinite"/><animate attributeName="opacity" from="0.7" to="0" dur="1.6s" repeatCount="indefinite"/>`;
+      g.appendChild(pulse);
+    }
+
+    const label = document.createElementNS('http://www.w3.org/2000/svg','text');
+    label.setAttribute('x', d.x); label.setAttribute('y', d.y + d.r + 13);
+    label.setAttribute('text-anchor','middle'); label.setAttribute('class','zone-label');
+    label.textContent = d.name.split(',')[0];
+    g.appendChild(label);
+
+    svg.appendChild(g);
+  });
+}
+
+/* ---------------- Table render ---------------- */
+function renderTable(){
+  const dict = I18N[currentLang];
+  const tbody = document.getElementById('districtTableBody');
+  tbody.innerHTML = '';
+  districts.slice().sort((a,b)=>['low','moderate','high','critical'].indexOf(b.risk)-['low','moderate','high','critical'].indexOf(a.risk))
+    .forEach(d=>{
+    const tr = document.createElement('tr');
+    tr.className = 'district-row' + (selectedDistrict.id===d.id ? ' active':'');
+    tr.addEventListener('click', ()=>{ selectedDistrict = d; renderMap(); renderTable(); renderChart(); });
+    tr.innerHTML = `
+      <td class="dname">${d.name}</td>
+      <td>${d.rain} mm</td>
+      <td><span class="bar-track"><span class="bar-fill" style="width:${d.soil}%; background:${RISK_COLOR[d.risk]}"></span></span>${d.soil}%</td>
+      <td><span class="risk-badge ${d.risk}">${dict['leg_'+(d.risk==='moderate'?'mod':d.risk==='critical'?'crit':d.risk)]}</span></td>
+      <td>${dict['road_'+d.road]}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ---------------- Chart render ---------------- */
+function renderChart(){
+  document.getElementById('chartTitle').textContent = selectedDistrict.name.split(',')[0] + ' — 7 day';
+  const svg = document.getElementById('chart');
+  svg.innerHTML = '';
+  const base = selectedDistrict.rain / 7;
+  const rain = Array.from({length:7}, (_,i)=> Math.max(4, base * (0.5 + Math.sin(i*0.9)*0.35 + i*0.12) + (i>4 ? base*0.6:0)));
+  const maxV = Math.max(...rain, 40);
+  const w=400,h=150, padB=22, padT=10, padL=6, padR=6;
+  const stepX = (w-padL-padR)/(rain.length-1);
+  const thresholdY = h - padB - ( (maxV*0.55)/maxV )*(h-padB-padT);
+
+  const thresholdLine = document.createElementNS('http://www.w3.org/2000/svg','line');
+  thresholdLine.setAttribute('x1',padL); thresholdLine.setAttribute('x2', w-padR);
+  thresholdLine.setAttribute('y1',thresholdY); thresholdLine.setAttribute('y2',thresholdY);
+  thresholdLine.setAttribute('stroke','#D9654F'); thresholdLine.setAttribute('stroke-dasharray','3,4'); thresholdLine.setAttribute('stroke-width','1');
+  svg.appendChild(thresholdLine);
+  const thLabel = document.createElementNS('http://www.w3.org/2000/svg','text');
+  thLabel.setAttribute('x', w-padR); thLabel.setAttribute('y', thresholdY-4); thLabel.setAttribute('text-anchor','end');
+  thLabel.setAttribute('fill','#D9654F'); thLabel.setAttribute('font-size','9'); thLabel.setAttribute('font-family','IBM Plex Mono, monospace');
+  thLabel.textContent = 'risk threshold';
+  svg.appendChild(thLabel);
+
+  let pathD = '';
+  let areaD = '';
+  rain.forEach((v,i)=>{
+    const x = padL + i*stepX;
+    const y = h - padB - (v/maxV)*(h-padB-padT);
+    pathD += (i===0?'M':'L') + x + ',' + y + ' ';
+    areaD += (i===0?'M':'L') + x + ',' + y + ' ';
+  });
+  areaD += `L${padL+(rain.length-1)*stepX},${h-padB} L${padL},${h-padB} Z`;
+
+  const area = document.createElementNS('http://www.w3.org/2000/svg','path');
+  area.setAttribute('d', areaD); area.setAttribute('fill', '#5B93B0'); area.setAttribute('fill-opacity','0.16'); area.setAttribute('stroke','none');
+  svg.appendChild(area);
+
+  const line = document.createElementNS('http://www.w3.org/2000/svg','path');
+  line.setAttribute('d', pathD); line.setAttribute('fill','none'); line.setAttribute('stroke','#5B93B0'); line.setAttribute('stroke-width','2');
+  svg.appendChild(line);
+
+  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  rain.forEach((v,i)=>{
+    const x = padL + i*stepX;
+    const dot = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    dot.setAttribute('cx',x); dot.setAttribute('cy', h - padB - (v/maxV)*(h-padB-padT)); dot.setAttribute('r','2.6');
+    dot.setAttribute('fill', v/maxV > 0.55 ? '#D9654F' : '#5B93B0');
+    svg.appendChild(dot);
+    const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x',x); t.setAttribute('y', h-6); t.setAttribute('text-anchor','middle');
+    t.setAttribute('fill','#5E7266'); t.setAttribute('font-size','8.5'); t.setAttribute('font-family','IBM Plex Mono, monospace');
+    t.textContent = days[i];
+    svg.appendChild(t);
+  });
+}
+
+/* ---------------- Alerts feed ---------------- */
+let alerts = [
+  { sev:'critical', district:'East Khasi Hills, Meghalaya', time:'Today 06:42', en:'URGENT: CRITICAL landslide risk in East Khasi Hills. Evacuate slope-adjacent areas immediately if instructed.' },
+  { sev:'high', district:'Dima Hasao, Assam', time:'Today 05:10', en:'ALERT: High landslide risk near Dima Hasao. Avoid travel on NH-27 flagged stretch.' },
+  { sev:'high', district:'North Sikkim', time:'Yesterday 21:55', en:'ALERT: High landslide risk in North Sikkim. Follow local authority instructions.' },
+];
+function renderAlerts(){
+  const feed = document.getElementById('alertFeed');
+  feed.innerHTML = '';
+  alerts.forEach(a=>{
+    const div = document.createElement('div');
+    div.className = 'alert-item';
+    div.innerHTML = `<span class="alert-sev ${a.sev}"></span>
+      <div class="alert-body">
+        <p class="msg">${a.en}</p>
+        <p class="meta">${a.district} · ${a.time} · SMS + App + ${a.sev==='critical'?'IVR':'Push'}</p>
+      </div>`;
+    feed.appendChild(div);
+  });
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=> t.classList.remove('show'), 3600);
+}
+
+document.getElementById('simulateBtn').addEventListener('click', ()=>{
+  const d = districts.find(x=>x.id==='nag');
+  d.risk = 'critical'; d.rain += 90; d.soil = Math.min(95, d.soil+22); d.road='blocked';
+  selectedDistrict = d;
+  alerts.unshift({ sev:'critical', district:d.name, time:'Just now', en:`URGENT: CRITICAL landslide risk in ${d.name.split(',')[0]}. Evacuate slope-adjacent areas immediately if instructed.` });
+  document.getElementById('statCritical').textContent = districts.filter(x=>x.risk==='critical').length;
+  document.getElementById('statHigh').textContent = districts.filter(x=>x.risk==='high').length;
+  renderMap(); renderTable(); renderChart(); renderAlerts();
+  if(lastTripResult && !lastTripResult.notFound) checkRoute();
+  showToast('Rainfall spike simulated at Kohima → risk recalculated → CRITICAL alert dispatched via SMS/App/IVR');
+});
+
+document.getElementById('connPill').addEventListener('click', ()=>{
+  isOffline = !isOffline;
+  const pill = document.getElementById('connPill');
+  pill.classList.toggle('offline', isOffline);
+  document.getElementById('connLabel').textContent = isOffline ? I18N[currentLang].conn_offline : I18N[currentLang].conn_online;
+  showToast(isOffline ? 'Simulating low-network mode: field reports & risk cache now served from local storage.' : 'Back online: queued reports synced to cloud.');
+});
+
+/* ---------------- Field reports ---------------- */
+const reports = [
+  { place:'Sohra Rd, Meghalaya', time:'12 min ago', status:'pending', c1:'#B8362C', c2:'#5B372E' },
+  { place:'NH-27, Dima Hasao', time:'48 min ago', status:'verified', c1:'#4FA88F', c2:'#2E4A3E' },
+  { place:'Mangan, Sikkim', time:'2 hr ago', status:'verified', c1:'#5B93B0', c2:'#2A3E4A' },
+  { place:'Kohima Bypass', time:'3 hr ago', status:'pending', c1:'#E0A94D', c2:'#4A3E2A' },
+  { place:'Aizawl-Lunglei Rd', time:'5 hr ago', status:'verified', c1:'#4FA88F', c2:'#2E4A3E' },
+  { place:'Dhalai river bank', time:'6 hr ago', status:'verified', c1:'#5B93B0', c2:'#2A3E4A' },
+];
+function renderReports(){
+  const dict = I18N[currentLang];
+  const grid = document.getElementById('reportGrid');
+  grid.innerHTML = '';
+  reports.forEach(r=>{
+    const card = document.createElement('div');
+    card.className = 'report-card';
+    card.innerHTML = `
+      <div class="report-thumb" style="background:linear-gradient(135deg, ${r.c1}, ${r.c2})">
+        <span class="report-status ${r.status}">${r.status === 'verified' ? '✓' : '···'}</span>
+      </div>
+      <div class="report-info">
+        <div class="place">${r.place}</div>
+        <div class="time">${r.time}</div>
+      </div>`;
+    grid.appendChild(card);
+  });
+}
+
+/* ---------------- Tourist route advisory ---------------- */
+const RISK_ORDER = { low:0, moderate:1, high:2, critical:3 };
+const ROUTES = [
+  { from:'Guwahati', to:'Cherrapunji (via Shillong)', legs:[
+      { name:'Guwahati–Shillong', districtId:null, road:'clear', rain:12 },
+      { name:'Shillong–Cherrapunji', districtId:'meg' },
+    ]},
+  { from:'Guwahati', to:'Kaziranga National Park', legs:[
+      { name:'Guwahati–Kaziranga (NH-27)', districtId:null, road:'clear', rain:18 },
+    ]},
+  { from:'Guwahati', to:'Haflong (Dima Hasao)', legs:[
+      { name:'Guwahati–Haflong', districtId:'asm' },
+    ]},
+  { from:'Gangtok', to:'Lachung (North Sikkim)', legs:[
+      { name:'Gangtok–Lachung', districtId:'sik' },
+    ]},
+  { from:'Itanagar', to:'Along (Upper Siang)', legs:[
+      { name:'Itanagar–Along', districtId:'arp' },
+    ]},
+  { from:'Kohima', to:'Dzukou Valley', legs:[
+      { name:'Kohima–Dzukou Valley', districtId:'nag' },
+    ]},
+  { from:'Imphal', to:'Ukhrul', legs:[
+      { name:'Imphal–Ukhrul', districtId:'man' },
+    ]},
+  { from:'Aizawl', to:'Champhai', legs:[
+      { name:'Aizawl–Champhai', districtId:'miz' },
+    ]},
+  { from:'Agartala', to:'Dhalai District', legs:[
+      { name:'Agartala–Dhalai', districtId:'tri' },
+    ]},
+];
+let lastTripResult = null;
+
+function populateTripSelects(){
+  const fromSel = document.getElementById('tripFrom');
+  const toSel = document.getElementById('tripTo');
+  const froms = [...new Set(ROUTES.map(r=>r.from))];
+  const tos = [...new Set(ROUTES.map(r=>r.to))];
+  const prevFrom = fromSel.value, prevTo = toSel.value;
+  fromSel.innerHTML = froms.map(f=>`<option value="${f}">${f}</option>`).join('');
+  toSel.innerHTML = tos.map(t=>`<option value="${t}">${t}</option>`).join('');
+  if(froms.includes(prevFrom)) fromSel.value = prevFrom;
+  if(tos.includes(prevTo)) toSel.value = prevTo;
+}
+
+function checkRoute(){
+  const from = document.getElementById('tripFrom').value;
+  const to = document.getElementById('tripTo').value;
+  const route = ROUTES.find(r=>r.from===from && r.to===to);
+  if(!route){
+    lastTripResult = { notFound:true, from, to };
+  } else {
+    const legsResolved = route.legs.map(leg=>{
+      if(leg.districtId){
+        const d = districts.find(x=>x.id===leg.districtId);
+        return { name:leg.name, risk:d.risk, road:d.road, rain:d.rain };
+      }
+      return { name:leg.name, risk:'low', road:leg.road, rain:leg.rain };
+    });
+    const worst = legsResolved.reduce((a,b)=> RISK_ORDER[b.risk] > RISK_ORDER[a.risk] ? b : a);
+    const verdictMap = { low:'SAFE_TO_TRAVEL', moderate:'TRAVEL_WITH_CAUTION', high:'AVOID_UNLESS_NECESSARY', critical:'AVOID_ROUTE' };
+    lastTripResult = { from, to, legs:legsResolved, tripRisk:worst.risk, verdictKey:verdictMap[worst.risk], worstSegment:worst.name };
+  }
+  renderTripResult(lastTripResult);
+}
+
+function tripAdviceText(result){
+  if(result.tripRisk==='critical') return `Avoid this route — critical risk near ${result.worstSegment}. Check again closer to your travel date.`;
+  if(result.tripRisk==='high') return `High risk near ${result.worstSegment} — consider delaying travel past this stretch, or check again nearer your date.`;
+  if(result.tripRisk==='moderate') return `Passable, but conditions are changing near ${result.worstSegment} — recheck before departure.`;
+  return `Low risk along this route currently. Recheck if heavy rain is forecast before you travel.`;
+}
+
+function renderTripResult(result){
+  if(!result) return;
+  const dict = I18N[currentLang];
+  const box = document.getElementById('tripResult');
+  box.style.display = 'block';
+  const badge = document.getElementById('tripBadge');
+  const legsBox = document.getElementById('tripLegs');
+  const weatherEl = document.getElementById('tripWeather');
+
+  if(result.notFound){
+    badge.className = 'risk-badge moderate';
+    badge.textContent = '?';
+    document.getElementById('tripAdvisory').textContent =
+      `No direct advisory configured for ${result.from} → ${result.to} in this prototype — a production system resolves any pair via the road-network graph. Try one of the popular routes in the dropdowns.`;
+    legsBox.innerHTML = '';
+    weatherEl.textContent = '';
+    return;
+  }
+
+  badge.className = 'risk-badge ' + result.tripRisk;
+  badge.textContent = dict['verdict_' + result.verdictKey];
+  document.getElementById('tripAdvisory').textContent = tripAdviceText(result);
+  legsBox.innerHTML = result.legs.map(l => `
+    <div class="trip-leg">
+      <span class="leg-dot" style="background:${RISK_COLOR[l.risk]}"></span>
+      <span class="leg-name">${l.name}</span>
+      <span class="leg-status">${dict['leg_' + (l.risk==='moderate'?'mod':l.risk==='critical'?'crit':l.risk)]} · ${dict['road_' + l.road]}</span>
+    </div>`).join('');
+  const maxRain = Math.max(...result.legs.map(l => l.rain || 0));
+  weatherEl.textContent = `Forecast: up to ${maxRain}mm rain expected along this route`;
+}
+
+document.getElementById('tripCheckBtn').addEventListener('click', checkRoute);
+document.getElementById('tripSubscribe').addEventListener('change', (e)=>{
+  if(e.target.checked) showToast(I18N[currentLang].subscribed_msg);
+});
+
+/* ---------------- Init ---------------- */
+populateTripSelects();
+const dateInput = document.getElementById('tripDate');
+const defaultDate = new Date(Date.now() + 2*86400000);
+dateInput.value = defaultDate.toISOString().slice(0,10);
+document.getElementById('tripFrom').value = 'Guwahati';
+document.getElementById('tripTo').value = 'Cherrapunji (via Shillong)';
+checkRoute();
+renderMap(); renderTable(); renderChart(); renderAlerts(); renderReports();
+</script>
+</body>
+</html>
