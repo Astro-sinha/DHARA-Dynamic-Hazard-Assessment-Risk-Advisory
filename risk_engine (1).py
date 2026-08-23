@@ -51,7 +51,9 @@ import requests
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix
+from dotenv import load_dotenv
 
+load_dotenv()
 # ---------------------------------------------------------------------------
 # ISRO Bhuvan API Integration Configuration
 #
@@ -68,32 +70,243 @@ BHUVAN_API_KEY = os.environ.get("BHUVAN_API_KEY")  # set via env / secrets manag
 BHUVAN_BASE_URL = "https://bhuvan-app1.nrsc.gov.in/api"
 
 
-def fetch_bhuvan_satellite_data(lat: float, lon: float, api_key: str | None = None) -> dict:
+def _make_bhuvan_aoi_polygon(lat: float, lon: float, size: float = 0.005) -> str:
     """
-    Fetch satellite terrain and land-surface parameters (slope displacement,
-    NDVI, land-cover change) from the ISRO Bhuvan API for one coordinate.
+    Create a small square AOI around the requested coordinate.
 
-    Returns a dict that always has a "status" key so callers can branch on
-    success vs fallback without a try/except at every call site:
-      {"status": "ok", "ndvi": 0.34, "slope_displacement_mm": 2.1, ...}
-      {"status": "no_api_key"}          -> key not configured
-      {"status": "unavailable", "error": "..."}  -> network/API failure
+    The polygon is used with Bhuvan's LULC 250K AOI-wise API.
     """
+    return (
+        f"POLYGON (("
+        f"{lon - size} {lat - size}, "
+        f"{lon + size} {lat - size}, "
+        f"{lon + size} {lat + size}, "
+        f"{lon - size} {lat + size}, "
+        f"{lon - size} {lat - size}"
+        f"))"
+    )
+
+
+def fetch_bhuvan_satellite_data(
+    lat: float,
+    lon: float,
+    api_key: str | None = None
+) -> dict:
+    """
+    Fetch Bhuvan LULC information for a small AOI around a coordinate.
+
+    Bhuvan provides Land Use / Land Cover (LULC) thematic statistics.
+    The returned data is used as geospatial context for DHARA.
+
+    Returns:
+
+        {
+            "status": "ok",
+            "source": "ISRO Bhuvan LULC 250K",
+            "lulc_records": [...],
+            "lulc_summary": {...},
+            "dominant_land_cover": "...",
+            "forest_pct": ...,
+            "built_up_pct": ...,
+            "water_pct": ...
+        }
+
+    On failure, the risk pipeline continues using fallback values.
+    """
+
     key = api_key or BHUVAN_API_KEY
-    if not key:
-        print("[Bhuvan API] No BHUVAN_API_KEY configured — skipping live satellite call, using fallback terrain data.")
-        return {"status": "no_api_key"}
 
-    params = {"lat": lat, "lon": lon, "token": key, "format": "json"}
+    if not key:
+        print(
+            "[Bhuvan API] No BHUVAN_API_KEY configured — "
+            "using fallback land-cover data."
+        )
+
+        return {
+            "status": "no_api_key",
+            "source": "fallback"
+        }
+
+    # Create a small AOI around the requested coordinate.
+    polygon = _make_bhuvan_aoi_polygon(lat, lon)
+
+    # Bhuvan LULC 250K AOI-wise API.
+    url = (
+        "https://bhuvan-app1.nrsc.gov.in/"
+        "api/lulc250k/curl_lulc250k.php"
+    )
+
+    params = {
+        "polygon": polygon,
+        "year": "2022_23",
+        "option": "json",
+        "token": key
+    }
+
     try:
-        response = requests.get(f"{BHUVAN_BASE_URL}/terrain/info", params=params, timeout=5)
+        response = requests.post(
+            url,
+            params=params,
+            headers={"Content-Type": "application/json"},
+            timeout=30
+        )
+
         response.raise_for_status()
-        data = response.json()
-        data["status"] = "ok"
-        return data
+
+        # Bhuvan may return JSON directly or JSON embedded in HTML.
+        try:
+            data = response.json()
+        except ValueError:
+            text = response.text.strip()
+
+            start = text.find("[")
+            end = text.rfind("]")
+
+            if start == -1 or end == -1:
+                raise ValueError(
+                    "Bhuvan returned a response that could not be parsed as JSON."
+                )
+
+            data = json.loads(text[start:end + 1])
+
+        if not isinstance(data, list):
+            raise ValueError(
+                f"Unexpected Bhuvan response format: {type(data).__name__}"
+            )
+
+        # --------------------------------------------------------------
+        # Convert Bhuvan LULC records into a simple summary.
+        # --------------------------------------------------------------
+
+        lulc_summary = {}
+
+        for record in data:
+            description = str(
+                record.get("LULC Description", "Unknown")
+            ).strip()
+
+            try:
+                area = float(
+                    record.get("Area in Sq. Km", 0)
+                )
+            except (TypeError, ValueError):
+                area = 0.0
+
+            lulc_summary[description] = (
+                lulc_summary.get(description, 0.0) + area
+            )
+
+        total_area = sum(lulc_summary.values())
+
+        if total_area > 0:
+            lulc_percentages = {
+                category: round((area / total_area) * 100, 2)
+                for category, area in lulc_summary.items()
+            }
+        else:
+            lulc_percentages = {}
+
+        # --------------------------------------------------------------
+        # Identify broad land-cover categories.
+        # --------------------------------------------------------------
+
+        forest_area = 0.0
+        built_up_area = 0.0
+        water_area = 0.0
+
+        for category, area in lulc_summary.items():
+
+            category_lower = category.lower()
+
+            if (
+                "forest" in category_lower
+                or "woodland" in category_lower
+            ):
+                forest_area += area
+
+            if (
+                "built" in category_lower
+                or "urban" in category_lower
+                or "settlement" in category_lower
+            ):
+                built_up_area += area
+
+            if (
+                "water" in category_lower
+                or "wetland" in category_lower
+            ):
+                water_area += area
+
+        if total_area > 0:
+            forest_pct = round(
+                (forest_area / total_area) * 100, 2
+            )
+
+            built_up_pct = round(
+                (built_up_area / total_area) * 100, 2
+            )
+
+            water_pct = round(
+                (water_area / total_area) * 100, 2
+            )
+        else:
+            forest_pct = 0.0
+            built_up_pct = 0.0
+            water_pct = 0.0
+
+        dominant_land_cover = (
+            max(lulc_summary, key=lulc_summary.get)
+            if lulc_summary
+            else "Unknown"
+        )
+
+        print(
+            "[Bhuvan API] LULC data retrieved successfully."
+        )
+
+        print(
+            f"  Dominant land cover : {dominant_land_cover}"
+        )
+
+        print(
+            f"  Forest              : {forest_pct}%"
+        )
+
+        print(
+            f"  Built-up            : {built_up_pct}%"
+        )
+
+        print(
+            f"  Water/Wetland       : {water_pct}%"
+        )
+
+        return {
+            "status": "ok",
+            "source": "ISRO Bhuvan LULC 250K",
+            "latitude": lat,
+            "longitude": lon,
+            "year": "2022_23",
+            "lulc_records": data,
+            "lulc_summary": lulc_summary,
+            "lulc_percentages": lulc_percentages,
+            "dominant_land_cover": dominant_land_cover,
+            "forest_pct": forest_pct,
+            "built_up_pct": built_up_pct,
+            "water_pct": water_pct
+        }
+
     except Exception as e:
-        print(f"[Bhuvan API] Warning: Failed to query Bhuvan service ({e}) — using fallback terrain data.")
-        return {"status": "unavailable", "error": str(e)}
+
+        print(
+            f"[Bhuvan API] Warning: LULC request failed "
+            f"({e}) — using fallback land-cover data."
+        )
+
+        return {
+            "status": "unavailable",
+            "source": "fallback",
+            "error": str(e)
+        }
 
 
 def enrich_reading_with_satellite_data(reading: "GridCellReading", lat: float, lon: float) -> "GridCellReading":
@@ -513,3 +726,5 @@ if __name__ == "__main__":
     ]
     trip = assess_route_risk("Guwahati → Shillong → Cherrapunji", legs)
     print(json.dumps(trip, indent=2))
+    if __name__ == "__main__":
+        print("BHUVAN API key loaded:", bool(BHUVAN_API_KEY))
