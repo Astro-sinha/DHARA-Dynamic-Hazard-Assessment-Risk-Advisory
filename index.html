@@ -1,0 +1,414 @@
+git <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DHARA — ISRO Bhuvan Landslide Early Warning System</title>
+  
+  <!-- SEO & OpenGraph Meta Tags -->
+  <meta name="description" content="AI/ML Predictive Landslide Early Warning System for India using ISRO Bhuvan satellite telemetry, IMD precipitation data, and IoT edge sensors.">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Leaflet GIS Mapping CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Top Header Navigation -->
+  <header class="app-header">
+    <div class="brand-container">
+      <span class="isro-badge">ISRO BHUVAN GEO-PORTAL</span>
+      <h1 class="brand-title">DHARA</h1>
+      <span class="brand-sub">AI/ML Landslide Risk & Early Warning Platform</span>
+    </div>
+
+    <div class="header-status">
+      <div class="live-indicator">
+        <span class="pulse-dot"></span>
+        <span>ISRO SATELLITE TELEMETRY: ACTIVE</span>
+      </div>
+      <button class="header-btn" id="btn-open-route-planner">
+        <i data-lucide="navigation"></i> Route Travel Advisory
+      </button>
+      <button class="header-btn" id="btn-sim-alert">
+        <i data-lucide="bell"></i> Broadcast SMS Alert
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Work Area -->
+  <main class="main-container">
+
+    <!-- Leaflet GIS Map Container (Full Map of India) -->
+    <div id="map-container">
+      <div id="map"></div>
+
+      <!-- Map Overlay Controls -->
+      <div class="map-floating-controls">
+        <div class="map-control-card">
+          <div class="map-control-title">
+            <span>GIS Map Layer (Bhuvan Telemetry)</span>
+            <i data-lucide="layers" style="width: 14px; height: 14px;"></i>
+          </div>
+          <button class="layer-select-btn active" id="layer-sat-hybrid">
+            <i data-lucide="map-pin"></i> Bhuvan Hybrid (Satellite + Road Network)
+          </button>
+          <button class="layer-select-btn" id="layer-sat">
+            <i data-lucide="globe"></i> ISRO High-Res Satellite Imagery
+          </button>
+          <button class="layer-select-btn" id="layer-topo">
+            <i data-lucide="mountain"></i> Survey of India Topographic DEM
+          </button>
+          <button class="layer-select-btn" id="layer-dark">
+            <i data-lucide="map"></i> GIS Dark Vector & Boundaries
+          </button>
+        </div>
+
+        <div class="map-control-card">
+          <div class="map-control-title">
+            <span>NE Regional & Micro-Grid Divisions</span>
+            <i data-lucide="shield-alert" style="width: 14px; height: 14px;"></i>
+          </div>
+          <div style="font-size: 11px; color: var(--primary-cyan); margin-bottom: 6px;">
+            <i data-lucide="map-pin" style="width: 12px; height: 12px; vertical-align: middle;"></i> Focus: Subdivisions & Transport Corridors
+          </div>
+          <div class="legend-grid">
+            <div class="legend-item"><span class="legend-color bg-low"></span> Low Hazard</div>
+            <div class="legend-item"><span class="legend-color bg-moderate"></span> Moderate</div>
+            <div class="legend-item"><span class="legend-color bg-high"></span> High Risk</div>
+            <div class="legend-item"><span class="legend-color bg-critical"></span> Critical Zone</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ISRO Bhuvan Style Telemetry & Live Lat/Lon Coordinate HUD Bar -->
+      <div class="bhuvan-hud-bar" id="bhuvan-hud-bar">
+        <span class="hud-item">DOP: <strong>03-12-2026</strong></span>
+        <span class="hud-divider">|</span>
+        <span class="hud-item">Lat: <strong id="hud-lat">25.2789° N</strong></span>
+        <span class="hud-divider">|</span>
+        <span class="hud-item">Lon: <strong id="hud-lon">91.7325° E</strong></span>
+        <span class="hud-divider">|</span>
+        <span class="hud-item">Zoom: <strong id="hud-zoom">7.2x</strong></span>
+      </div>
+    </div>
+
+
+    <!-- Sidebar Control & Intelligence Panel -->
+    <aside class="sidebar-panel">
+      <!-- Tabs Navigation -->
+      <div class="tab-navigation">
+        <button class="tab-btn active" data-tab="tab-predictor">
+          <i data-lucide="cpu"></i> Risk Engine
+        </button>
+        <button class="tab-btn" data-tab="tab-journey">
+          <i data-lucide="navigation-2"></i> Journey
+        </button>
+        <button class="tab-btn" data-tab="tab-stations">
+          <i data-lucide="radio"></i> Stations
+        </button>
+        <button class="tab-btn" data-tab="tab-analytics">
+          <i data-lucide="bar-chart-2"></i> Analytics
+        </button>
+      </div>
+
+
+      <!-- TAB 1: AI Risk Engine Simulator -->
+      <div class="tab-content active" id="tab-predictor">
+        <div class="panel-card">
+          <div class="cell-info-header">
+            <div>
+              <div class="cell-name" id="selected-cell-id">NER-MEG-014</div>
+              <div class="cell-district" id="selected-cell-district">East Khasi Hills, Meghalaya</div>
+            </div>
+            <span class="risk-badge badge-critical" id="selected-risk-badge">CRITICAL</span>
+          </div>
+        </div>
+
+        <!-- Bhuvan Satellite Live Data Box -->
+        <div class="panel-card" style="background: rgba(0, 229, 255, 0.05); border-color: rgba(0, 229, 255, 0.3);">
+          <div class="card-title">
+            <span style="color: var(--primary-cyan); display: flex; align-items: center; gap: 6px;">
+              <i data-lucide="satellite"></i> ISRO Bhuvan Satellite Integration
+            </span>
+            <span style="font-size: 10px; color: var(--text-muted);" id="sat-status-tag">ONLINE</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
+            <div>Vegetation NDVI: <strong id="val-ndvi-display" style="color: #fff;">0.12</strong></div>
+            <div>Slope Disp: <strong id="val-disp-display" style="color: #fff;">2.1 mm</strong></div>
+          </div>
+        </div>
+
+        <!-- Interactive Environmental Sliders -->
+        <div class="panel-card">
+          <div class="card-title">Environmental Feature Parameters</div>
+
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>Antecedent 72h Rainfall (mm)</span>
+              <span class="slider-val" id="val-rain72">280 mm</span>
+            </div>
+            <input type="range" min="0" max="500" value="280" class="custom-slider" id="slider-rain72">
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>Peak Intensity (mm/hr)</span>
+              <span class="slider-val" id="val-intensity">48 mm/h</span>
+            </div>
+            <input type="range" min="0" max="100" value="48" class="custom-slider" id="slider-intensity">
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>Soil Moisture Saturation (%)</span>
+              <span class="slider-val" id="val-moisture">82 %</span>
+            </div>
+            <input type="range" min="0" max="100" value="82" class="custom-slider" id="slider-moisture">
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>Slope Gradient (Degrees)</span>
+              <span class="slider-val" id="val-slope">41°</span>
+            </div>
+            <input type="range" min="0" max="60" value="41" class="custom-slider" id="slider-slope">
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>Historical Incidents (5 Years)</span>
+              <span class="slider-val" id="val-history">3 events</span>
+            </div>
+            <input type="range" min="0" max="8" value="3" class="custom-slider" id="slider-history">
+          </div>
+        </div>
+
+        <!-- Engine Comparison Verdict -->
+        <div class="panel-card">
+          <div class="card-title">Dual-Engine Prediction Verdict</div>
+          
+          <div class="engine-comparison-grid">
+            <div class="engine-box">
+              <div class="engine-title">Cloud ML Model</div>
+              <div class="engine-result" id="cloud-ml-res" style="color: var(--risk-critical);">CRITICAL</div>
+              <div class="engine-detail">Conf: <span id="cloud-ml-conf">92%</span></div>
+            </div>
+
+            <div class="engine-box">
+              <div class="engine-title">Edge Fallback Scorer</div>
+              <div class="engine-result" id="edge-rule-res" style="color: var(--risk-critical);">CRITICAL</div>
+              <div class="engine-detail">Score: <span id="edge-rule-score">11 / 12</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dynamic SMS Alert Box -->
+        <div class="panel-card" id="alert-drawer-container">
+          <div class="card-title" style="color: var(--risk-critical);">
+            <span style="display: flex; align-items: center; gap: 6px;">
+              <i data-lucide="alert-triangle"></i> Emergency Alert Broadcast
+            </span>
+            <select id="select-alert-lang" style="background: rgba(0,0,0,0.5); color: #fff; border: 1px solid var(--border-color); border-radius: 4px; padding: 2px 6px; font-size: 11px;">
+              <option value="en">English</option>
+              <option value="as">Assamese (অসমীয়া)</option>
+              <option value="hi">Hindi (हिन्दी)</option>
+            </select>
+          </div>
+          <div class="alert-drawer">
+            <div class="alert-message" id="alert-msg-text">
+              URGENT: CRITICAL landslide risk in East Khasi Hills, Meghalaya (NER-MEG-014). Evacuate low-lying/slope-adjacent areas immediately if instructed.
+            </div>
+            <div class="alert-meta">
+              <span class="alert-tag">SMS Gateway</span>
+              <span class="alert-tag">App Push</span>
+              <span class="alert-tag">IVR Voice Alert</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- TAB 2: FROM → TO JOURNEY INTELLIGENCE PLANNER -->
+      <div class="tab-content" id="tab-journey">
+
+        <!-- From / To Input Card -->
+        <div class="panel-card" style="padding:14px;">
+          <div class="card-title" style="color:var(--primary-cyan);">
+            <span style="display:flex;align-items:center;gap:6px;"><i data-lucide="navigation-2"></i> Journey Risk Planner</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;">
+            Enter From & To locations to analyze landslide risk, road status, traffic, construction, and safest route.
+          </div>
+
+          <!-- FROM -->
+          <div class="journey-input-group">
+            <div class="journey-input-label"><span class="pin-dot dot-a">A</span> From (Origin)</div>
+            <div class="autocomplete-wrapper">
+              <input type="text" id="journey-from" class="journey-input" placeholder="e.g. Guwahati, Shillong, Gangtok...">
+              <div class="autocomplete-dropdown" id="from-dropdown"></div>
+            </div>
+          </div>
+
+          <!-- Swap Button -->
+          <div style="display:flex;justify-content:center;margin:6px 0;">
+            <button id="btn-swap-journey" class="swap-btn" title="Swap origin and destination">⇅</button>
+          </div>
+
+          <!-- TO -->
+          <div class="journey-input-group">
+            <div class="journey-input-label"><span class="pin-dot dot-b">B</span> To (Destination)</div>
+            <div class="autocomplete-wrapper">
+              <input type="text" id="journey-to" class="journey-input" placeholder="e.g. Cherrapunji, Kohima, Mangan...">
+              <div class="autocomplete-dropdown" id="to-dropdown"></div>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div style="display:flex;gap:8px;margin-top:12px;">
+            <button id="btn-find-route" class="route-find-btn">
+              <i data-lucide="search"></i> Analyze Route
+            </button>
+            <button id="btn-clear-route" class="route-clear-btn">
+              <i data-lucide="x"></i> Clear
+            </button>
+          </div>
+        </div>
+
+        <!-- Results Panel -->
+        <div id="journey-results-panel" style="display:none;">
+
+          <!-- Verdict Banner -->
+          <div class="panel-card" style="background:rgba(0,0,0,0.4);border-color:rgba(255,255,255,0.15);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <div>
+                <span style="font-size:11px;color:var(--text-muted);">Route:</span>
+                <span id="journey-from-label" style="font-weight:700;color:#fff;"> — </span>
+                <span style="color:var(--primary-cyan);font-size:14px;"> → </span>
+                <span id="journey-to-label" style="font-weight:700;color:#fff;"></span>
+              </div>
+            </div>
+            <div id="journey-verdict-text" style="font-size:16px;font-weight:800;margin-bottom:10px;"></div>
+
+            <!-- Quick Stats -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+              <div style="background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:8px;">
+                📏 Distance<br><strong id="journey-dist" style="color:var(--primary-cyan);font-size:14px;"></strong>
+              </div>
+              <div style="background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:8px;">
+                ⏱️ Est. Time<br><strong id="journey-time" style="color:var(--primary-cyan);font-size:14px;"></strong>
+              </div>
+            </div>
+
+            <!-- Flags Row -->
+            <div id="journey-flags" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;"></div>
+          </div>
+
+          <!-- Segment-by-Segment Breakdown -->
+          <div class="panel-card" style="padding:14px;">
+            <div class="card-title">Route Segment Analysis</div>
+            <div id="journey-segments" style="display:flex;flex-direction:column;gap:10px;"></div>
+          </div>
+
+          <!-- Advisory Text -->
+          <div class="panel-card" style="background:rgba(0,229,255,0.05);border-color:rgba(0,229,255,0.25);">
+            <div class="card-title" style="color:var(--primary-cyan);">
+              <i data-lucide="info"></i> Safest Route Advisory
+            </div>
+            <div id="journey-advisory" style="font-size:12px;line-height:1.6;color:#e2e8f0;"></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- TAB 3: Active Monitoring Stations List -->
+      <div class="tab-content" id="tab-stations">
+
+        <div class="panel-card">
+          <div class="card-title">National Monitoring Network Grid</div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+            Select any monitoring station in India to inspect live telemetry & hazard prediction.
+          </div>
+          <div id="station-list-container" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Station items populated via JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: Analytics & Feature Importance -->
+      <div class="tab-content" id="tab-analytics">
+        <div class="panel-card">
+          <div class="card-title">Random Forest Feature Importance</div>
+          <div class="chart-box">
+            <canvas id="chart-feature-importance"></canvas>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="card-title">Soil Saturation vs Rainfall Hazard</div>
+          <div class="chart-box">
+            <canvas id="chart-rainfall-moisture"></canvas>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+  </main>
+
+  <!-- Route Travel Advisory Modal -->
+  <div class="modal-backdrop" id="route-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">
+          <i data-lucide="map-pin" style="vertical-align: middle; margin-right: 6px;"></i>
+          Tourist & Transport Route Hazard Advisory
+        </h2>
+        <button class="close-btn" id="btn-close-modal">&times;</button>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 6px;">Select National Highway / Tourist Route Corridor:</label>
+        <select id="select-route-corridor" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.5); color: #fff; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px;">
+          <option value="meg">Guwahati → Shillong → Cherrapunji Corridor (NH-6 / NH-106)</option>
+          <option value="sik">Siliguri → Gangtok → North Sikkim Highway (NH-10)</option>
+          <option value="utt">Rishikesh → Chamoli → Joshimath Pilgrimage Corridor (NH-7)</option>
+          <option value="ker">Kozhikode → Wayanad Ghat Pass (NH-766)</option>
+        </select>
+      </div>
+
+      <div class="panel-card" style="background: rgba(0,0,0,0.4);" id="route-verdict-box">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <span style="font-weight: 700; font-size: 15px;" id="route-name-title">Guwahati → Shillong → Cherrapunji</span>
+          <span class="risk-badge badge-critical" id="route-verdict-badge">CRITICAL</span>
+        </div>
+        <div style="font-size: 13px; color: #f3f4f6; line-height: 1.5;" id="route-advisory-desc">
+          Avoid trip — critical landslide risk near Shillong–Cherrapunji. Check back closer to your travel date or ask local authorities for an alternate route.
+        </div>
+      </div>
+
+      <div id="route-legs-container" style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto;">
+        <!-- Legs rendered here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="risk_engine.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>

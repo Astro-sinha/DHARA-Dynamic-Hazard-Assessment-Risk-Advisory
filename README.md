@@ -1,88 +1,64 @@
-# DHARA-Dynamic-Hazard-Assessment-Risk-Advisory
+# DHARA — AI/ML Landslide Early Warning & Risk Prediction System
 
-### AI-Based Early Warning & Landslide Risk Monitoring System for the North Eastern Region
+**DHARA** (Landslide Early Warning System) is an interactive, ISRO Bhuvan Geo-Portal inspired web platform and predictive ML analytics engine designed for real-time landslide risk assessment, transport corridor advisories, and multi-lingual emergency alert routing.
 
-DHARA is an AI-powered disaster-risk monitoring and early warning platform designed for the North Eastern Region (NER) of India.
-
-The system combines rainfall, terrain, soil moisture, historical landslide information, geospatial data and field observations to estimate landslide risk at vulnerable locations and convert that risk into actionable information for authorities, field teams, local communities and travelers.
-
-Instead of only displaying weather or historical hazard information, DHARA aims to answer three practical questions:
-
-> **Where is the risk? Why is the risk increasing? What action should be taken?**
+![ISRO Bhuvan Aesthetic](https://img.shields.io/badge/GIS-ISRO%20Bhuvan%20Telemetry-00e5ff?style=for-the-badge)
+![ML Engine](https://img.shields.io/badge/ML%20Engine-Random%20Forest%20%2B%20Edge%20Rule%20Fallback-10b981?style=for-the-badge)
+![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
 
 ---
 
-## Features
+## 🌟 Key Features
 
-### AI-Based Landslide Risk Prediction
+1. **ISRO Bhuvan GIS Map Viewer**:
+   - High-resolution Bhuvan Satellite Imagery + Hybrid Road Networks.
+   - Survey of India Topographic DEM and Dark Vector layers.
+   - Live Latitude, Longitude, and Zoom Level cursor tracking (`DOP: 03-12-2026 | Lat: 25.2789° N | Lon: 91.7325° E`).
 
-- Multi-factor landslide risk assessment using:
-  - 24-hour rainfall
-  - 72-hour antecedent rainfall
-  - Rainfall intensity
-  - Soil moisture
-  - Terrain slope
-  - Vegetation / NDVI
-  - Historical landslide activity
-  - Soil characteristics
-  - Road proximity for impact assessment
-- Produces four risk levels:
-  - `LOW`
-  - `MODERATE`
-  - `HIGH`
-  - `CRITICAL`
-- Provides a risk probability and supporting risk factors.
-- Designed to support periodic prediction updates during active rainfall events.
+2. **North-East & Himalayan Sub-district Divisions**:
+   - High-resolution monitoring station grid cells across all 8 North-Eastern states (*Meghalaya, Mizoram, Sikkim, Assam, Arunachal Pradesh, Nagaland, Manipur, Tripura*) and Himalayan belts.
+   - Color-coded micro-grid polygons (`LOW`, `MODERATE`, `HIGH`, `CRITICAL`).
 
-### GIS-Based Risk Monitoring
+3. **Dual-Engine AI Risk Prediction**:
+   - **Cloud ML Random Forest Model**: Outputs 4-level risk probability & confidence score.
+   - **Edge Gateway Scorer**: Offline rule-based scorer for low-power edge devices when internet connection is lost.
 
-- Interactive map-based visualization of the North Eastern Region.
-- Risk zones displayed geographically.
-- District and monitoring-zone level risk information.
-- Visual risk heatmap for vulnerable regions.
-- Road and infrastructure impact visualization.
-- Field-observed incidents can be displayed separately from model-predicted risk.
+4. **Tourist & Transport Route Advisory Planner**:
+   - Trip-level risk evaluator for National Highway corridors (*Guwahati–Shillong–Cherrapunji*, *Siliguri–Gangtok*, *Rishikesh–Joshimath*, *Kozhikode–Wayanad*).
 
-### Explainable Risk
+5. **Multilingual Emergency Alerts**:
+   - Generates SMS, App Push, and IVR alerts in **English**, **Assamese (অসমীয়া)**, and **Hindi (हिन्दी)**.
 
-DHARA does not only display a risk label.
+---
 
-For every significant prediction, the system can show the factors contributing to the risk, such as:
+## 📁 Repository Structure
 
-- High accumulated rainfall
-- Increasing soil moisture
-- Steep terrain
-- Previous landslide activity
-- Other environmental indicators
+```
+DHARA/
+├── index.html        # Main Bhuvan-inspired GIS application view
+├── styles.css        # Glassmorphic dark design system & GIS map styling
+├── app.js            # Leaflet map orchestrator & dynamic HUD coordinate tracker
+├── risk_engine.js    # JS port of AI Risk Prediction Engine & sub-division datasets
+├── risk_engine.py    # Python Random Forest & Edge Scorer prototype
+└── README.md         # Project documentation
+```
 
-This allows authorities to understand **why a location has been classified as high risk**.
+---
 
-### Weather-Linked Risk Forecast
+## 🚀 How to Run Locally
 
-- Uses current and forecast rainfall information.
-- Tracks changing hazard conditions.
-- Displays expected risk trends over the coming hours/days.
-- Helps identify locations where risk may increase before an incident occurs.
+### Option 1: Python HTTP Server
+```bash
+python -m http.server 8080
+# Open http://localhost:8080 in your browser
+```
 
-### Alert & Notification Engine
+### Option 2: Node / Serve
+```bash
+npx serve .
+```
 
-- Generates alerts when risk crosses configured thresholds.
-- Supports severity-based escalation.
-- Example:
-  - `HIGH` → SMS / app / dashboard notification
-  - `CRITICAL` → SMS / app / dashboard / IVR
-- Supports multilingual alert templates.
-- Keeps alert generation separate from the ML model so thresholds and message templates can be changed independently.
+---
 
-### Tourist Route Risk Advisory
-
-Travelers can check the risk associated with a route before travelling.
-
-Example:
-
-```text
-Guwahati
-    ↓
-Shillong
-    ↓
-Cherrapunji
+## 📄 License
+This project is open-source under the MIT License.
