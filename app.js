@@ -700,4 +700,273 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   selectStation(PRESET_STATIONS[0]);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FIELD REPORTING — REAL-TIME PHOTO UPLOAD MODULE
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Photo markers layer on map
+  const photoMarkersGroup = L.layerGroup().addTo(map);
+
+  // Gradient palettes for demo cards (used as placeholder backgrounds)
+  const CARD_GRADIENTS = [
+    "linear-gradient(135deg, #c0392b, #8e44ad)",
+    "linear-gradient(135deg, #1a6b6b, #0d9488)",
+    "linear-gradient(135deg, #1e3a5f, #2563eb)",
+    "linear-gradient(135deg, #7c5a00, #d97706)",
+    "linear-gradient(135deg, #1a6b6b, #059669)",
+    "linear-gradient(135deg, #1e3a5f, #0891b2)"
+  ];
+
+  // Seed demo field reports with user-provided images
+  const fieldReports = [
+    { id: "fr-1", location: "Sohra Rd, Meghalaya", riskLevel: "CRITICAL", notes: "Active slope movement observed. Water seeping through road crack.", time: "12 min ago", imgSrc: "assets/reports/report1.jpg", lat: 25.28, lon: 91.73, pending: true },
+    { id: "fr-2", location: "NH-27, Dima Hasao", riskLevel: "HIGH", notes: "Boulder debris on roadway. Emergency response team deployed with excavators.", time: "48 min ago", imgSrc: "assets/reports/report2.jpg", lat: 25.18, lon: 93.02, pending: false },
+    { id: "fr-3", location: "Mangan, Sikkim", riskLevel: "MODERATE", notes: "Coastal/cliff slope erosion observed near coastal access road.", time: "2 hr ago", imgSrc: "assets/reports/report3.jpg", lat: 27.50, lon: 88.54, pending: false },
+    { id: "fr-4", location: "Kohima Bypass", riskLevel: "HIGH", notes: "Massive mudslide accumulation across hillside village route.", time: "3 hr ago", imgSrc: "assets/reports/report4.jpg", lat: 25.68, lon: 94.11, pending: true },
+    { id: "fr-5", location: "Aizawl-Lunglei Rd", riskLevel: "MODERATE", notes: "Rockfall debris blocking highway lane. Net netting under strain.", time: "5 hr ago", imgSrc: "assets/reports/report5.jpg", lat: 23.73, lon: 92.72, pending: false },
+    { id: "fr-6", location: "Dhalai river bank", riskLevel: "LOW", notes: "Severe rockfall and landslide debris on mountain roadway.", time: "6 hr ago", imgSrc: "assets/reports/report6.jpg", lat: 23.83, lon: 91.29, pending: false }
+  ];
+
+  const RISK_BADGE_STYLES = {
+    LOW: "background:rgba(16,185,129,0.85);color:#fff;",
+    MODERATE: "background:rgba(245,158,11,0.85);color:#000;",
+    HIGH: "background:rgba(249,115,22,0.85);color:#fff;",
+    CRITICAL: "background:rgba(239,68,68,0.9);color:#fff;"
+  };
+
+  function getTimeAgo(ms) {
+    const secs = Math.floor((Date.now() - ms) / 1000);
+    if (secs < 60) return `${secs} sec ago`;
+    const mins = Math.floor(secs / 60);
+    if (mins < 60) return `${mins} min ago`;
+    return `${Math.floor(mins / 60)} hr ago`;
+  }
+
+  function renderFieldReportsGallery() {
+    const gallery = document.getElementById("field-reports-gallery");
+    const countBadge = document.getElementById("report-count-badge");
+    gallery.innerHTML = "";
+    countBadge.textContent = `${fieldReports.length} REPORTS`;
+
+    fieldReports.forEach(report => {
+      const card = document.createElement("div");
+      card.className = "field-report-card";
+      card.id = `card-${report.id}`;
+
+      const imgHTML = report.imgSrc
+        ? `<img class="field-report-img" src="${report.imgSrc}" alt="${report.location}">`
+        : `<div class="field-report-img-placeholder" style="background:${report.gradient};">
+             <span style="font-size:22px;">📷</span>
+             <span>${report.location.split(",")[0]}</span>
+           </div>`;
+
+      const pendingDot = report.pending
+        ? `<div class="field-report-pending-dot" title="Pending verification"></div>` : "";
+
+      card.innerHTML = `
+        ${imgHTML}
+        ${pendingDot}
+        <div class="field-report-badge" style="${RISK_BADGE_STYLES[report.riskLevel]}">${report.riskLevel}</div>
+        <div class="field-report-meta">
+          <div class="field-report-location">${report.location}</div>
+          <div class="field-report-time">${report.time}</div>
+        </div>`;
+
+      card.addEventListener("click", () => openLightbox(report));
+      gallery.appendChild(card);
+    });
+  }
+
+  // Place demo markers on map
+  function renderPhotoMarkersOnMap() {
+    photoMarkersGroup.clearLayers();
+    fieldReports.forEach(r => {
+      if (r.lat && r.lon) {
+        const icon = L.divIcon({
+          className: "",
+          html: `<div class="photo-map-marker" title="${r.location}">📷</div>`,
+          iconSize: [28, 28], iconAnchor: [14, 14]
+        });
+        const marker = L.marker([r.lat, r.lon], { icon });
+        marker.bindPopup(`<div style="font-family:'Outfit';font-size:12px;min-width:160px;">
+          <div style="font-weight:800;color:#1e3a8a;margin-bottom:4px;">📷 Field Report</div>
+          <div style="font-weight:600;">${r.location}</div>
+          <div style="color:#666;font-size:11px;">${r.time}</div>
+          <div style="margin-top:4px;font-size:11px;color:${r.riskLevel==="CRITICAL"?"#dc2626":r.riskLevel==="HIGH"?"#ea580c":r.riskLevel==="MODERATE"?"#d97706":"#059669"};font-weight:700;">${r.riskLevel} RISK</div>
+        </div>`);
+        marker.addTo(photoMarkersGroup);
+      }
+    });
+  }
+
+  renderFieldReportsGallery();
+  renderPhotoMarkersOnMap();
+
+  // ── LIGHTBOX ─────────────────────────────────────────────────────────────
+  const lightboxModal = document.getElementById("photo-lightbox-modal");
+  document.getElementById("btn-close-lightbox").addEventListener("click", () => lightboxModal.classList.remove("open"));
+  lightboxModal.addEventListener("click", e => { if (e.target === lightboxModal) lightboxModal.classList.remove("open"); });
+
+  function openLightbox(report) {
+    document.getElementById("lightbox-img").src = report.imgSrc || "";
+    document.getElementById("lightbox-img").style.display = report.imgSrc ? "block" : "none";
+    document.getElementById("lightbox-meta").innerHTML = `
+      <div style="background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:8px;">
+        📍 Location<br><strong style="color:#fff;">${report.location}</strong>
+      </div>
+      <div style="background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:8px;">
+        ⚠️ Risk Level<br><strong style="${RISK_BADGE_STYLES[report.riskLevel].replace('background:','color:').split(';')[0]}">${report.riskLevel}</strong>
+      </div>
+      <div style="background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:8px;">
+        ⏱️ Reported<br><strong style="color:#fff;">${report.time}</strong>
+      </div>
+      <div style="background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:8px;">
+        🔖 Status<br><strong style="color:${report.pending?"var(--accent-gold)":"var(--risk-low)"};">${report.pending?"Pending Verification":"Verified"}</strong>
+      </div>`;
+    document.getElementById("lightbox-notes").innerHTML = report.notes
+      ? `<strong style="color:var(--text-muted);font-size:11px;">FIELD NOTES</strong><br>${report.notes}` : "";
+    lightboxModal.classList.add("open");
+  }
+
+  // ── DRAG & DROP UPLOAD ZONE ───────────────────────────────────────────────
+  let stagedFiles = []; // Array of { file, dataUrl }
+
+  const dropzone = document.getElementById("photo-dropzone");
+  const fileInput = document.getElementById("photo-file-input");
+  const cameraInput = document.getElementById("photo-camera-input");
+  const metaForm = document.getElementById("photo-meta-form");
+  const stagingDiv = document.getElementById("photo-preview-staging");
+  const previewGrid = document.getElementById("photo-preview-grid");
+
+  dropzone.addEventListener("dragover", e => { e.preventDefault(); dropzone.classList.add("drag-over"); });
+  dropzone.addEventListener("dragleave", () => dropzone.classList.remove("drag-over"));
+  dropzone.addEventListener("drop", e => {
+    e.preventDefault();
+    dropzone.classList.remove("drag-over");
+    handleFiles([...e.dataTransfer.files]);
+  });
+  dropzone.addEventListener("click", e => {
+    if (!e.target.closest(".upload-btn-label") && !e.target.closest(".upload-btn-camera")) {
+      fileInput.click();
+    }
+  });
+
+  fileInput.addEventListener("change", () => handleFiles([...fileInput.files]));
+  cameraInput.addEventListener("change", () => handleFiles([...cameraInput.files]));
+  document.getElementById("btn-camera-capture").addEventListener("click", e => {
+    e.stopPropagation();
+    cameraInput.click();
+  });
+
+  function handleFiles(files) {
+    const imageFiles = files.filter(f => f.type.startsWith("image/"));
+    if (!imageFiles.length) return;
+    imageFiles.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        stagedFiles.push({ file, dataUrl: e.target.result });
+        renderStagingPreviews();
+      };
+      reader.readAsDataURL(file);
+    });
+    metaForm.style.display = "block";
+    stagingDiv.style.display = "block";
+  }
+
+  function renderStagingPreviews() {
+    previewGrid.innerHTML = "";
+    stagedFiles.forEach((item, idx) => {
+      const thumb = document.createElement("div");
+      thumb.className = "photo-preview-thumb";
+      thumb.innerHTML = `<img src="${item.dataUrl}" alt="Preview">
+        <button class="photo-preview-remove" data-idx="${idx}" title="Remove">✕</button>`;
+      previewGrid.appendChild(thumb);
+    });
+    previewGrid.querySelectorAll(".photo-preview-remove").forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        stagedFiles.splice(parseInt(btn.dataset.idx), 1);
+        if (stagedFiles.length === 0) {
+          metaForm.style.display = "none";
+          stagingDiv.style.display = "none";
+        }
+        renderStagingPreviews();
+      });
+    });
+  }
+
+  // ── SUBMIT FIELD REPORT ───────────────────────────────────────────────────
+  document.getElementById("btn-submit-photo").addEventListener("click", () => {
+    if (!stagedFiles.length) return;
+    const location = document.getElementById("photo-location").value.trim() || "Unknown Location";
+    const riskLevel = document.getElementById("photo-risk-level").value;
+    const notes = document.getElementById("photo-notes").value.trim();
+
+    // Pick location coords from nearest matching station
+    const matchedStation = PRESET_STATIONS.find(st =>
+      location.toLowerCase().includes(st.state.toLowerCase()) ||
+      location.toLowerCase().includes(st.district.toLowerCase().split(" ")[0])
+    ) || PRESET_STATIONS[Math.floor(Math.random() * PRESET_STATIONS.length)];
+
+    // Add a report for the first uploaded image
+    const newReport = {
+      id: `fr-user-${Date.now()}`,
+      location,
+      riskLevel,
+      notes,
+      time: "just now",
+      imgSrc: stagedFiles[0].dataUrl,
+      gradient: CARD_GRADIENTS[0],
+      lat: matchedStation.lat + (Math.random() - 0.5) * 0.05,
+      lon: matchedStation.lon + (Math.random() - 0.5) * 0.05,
+      pending: true
+    };
+    fieldReports.unshift(newReport);
+
+    // Reset form
+    stagedFiles = [];
+    previewGrid.innerHTML = "";
+    metaForm.style.display = "none";
+    stagingDiv.style.display = "none";
+    document.getElementById("photo-location").value = "";
+    document.getElementById("photo-notes").value = "";
+    document.getElementById("photo-risk-level").value = "MODERATE";
+    fileInput.value = "";
+    cameraInput.value = "";
+
+    // Refresh gallery and map markers
+    renderFieldReportsGallery();
+    renderPhotoMarkersOnMap();
+
+    // Fly to new marker
+    map.flyTo([newReport.lat, newReport.lon], 10, { duration: 1.2 });
+
+    // Show toast
+    showToast(`✅ Field report submitted from ${location}`);
+  });
+
+  document.getElementById("btn-cancel-photo").addEventListener("click", () => {
+    stagedFiles = [];
+    previewGrid.innerHTML = "";
+    metaForm.style.display = "none";
+    stagingDiv.style.display = "none";
+    fileInput.value = "";
+    cameraInput.value = "";
+  });
+
+  // ── TOAST ──────────────────────────────────────────────────────────────────
+  function showToast(msg) {
+    let toast = document.getElementById("upload-toast");
+    if (!toast) {
+      toast = document.createElement("div");
+      toast.id = "upload-toast";
+      toast.className = "upload-toast";
+      document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 3200);
+  }
+
 });

@@ -1,4 +1,4 @@
-git <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -122,6 +122,9 @@ git <!DOCTYPE html>
         </button>
         <button class="tab-btn" data-tab="tab-analytics">
           <i data-lucide="bar-chart-2"></i> Analytics
+        </button>
+        <button class="tab-btn" data-tab="tab-fieldreports">
+          <i data-lucide="camera"></i> Field
         </button>
       </div>
 
@@ -365,6 +368,84 @@ git <!DOCTYPE html>
         </div>
       </div>
 
+      <!-- TAB 5: Field Reporting & Real-Time Photo Uploads -->
+      <div class="tab-content" id="tab-fieldreports">
+
+        <!-- Upload Card -->
+        <div class="panel-card" style="padding:14px;">
+          <div class="card-title" style="color:var(--primary-cyan);">
+            <span style="display:flex;align-items:center;gap:6px;"><i data-lucide="camera"></i> Field Reporting — Live Photo Upload</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;">
+            Upload real-time field photos from citizens or officers. Photos are geotagged and displayed on the risk map.
+          </div>
+
+          <!-- Drag & Drop Upload Zone -->
+          <div id="photo-dropzone" class="photo-dropzone">
+            <i data-lucide="upload-cloud" style="width:32px;height:32px;color:var(--primary-cyan);margin-bottom:8px;"></i>
+            <div style="font-weight:700;font-size:13px;color:#fff;margin-bottom:4px;">Drag & Drop Photos Here</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">or click to browse · JPG, PNG, WEBP supported</div>
+            <div style="display:flex;gap:8px;justify-content:center;">
+              <label for="photo-file-input" class="upload-btn-label">
+                <i data-lucide="folder-open" style="width:13px;height:13px;"></i> Browse Files
+              </label>
+              <button id="btn-camera-capture" class="upload-btn-camera">
+                <i data-lucide="camera" style="width:13px;height:13px;"></i> Use Camera
+              </button>
+            </div>
+            <input type="file" id="photo-file-input" accept="image/*" multiple style="display:none;">
+            <input type="file" id="photo-camera-input" accept="image/*" capture="environment" style="display:none;">
+          </div>
+
+          <!-- Photo Metadata Form (hidden until photo selected) -->
+          <div id="photo-meta-form" style="display:none;margin-top:12px;">
+            <div style="margin-bottom:8px;">
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">📍 Location / Landmark</label>
+              <input type="text" id="photo-location" placeholder="e.g. Sohra Rd, Meghalaya" class="photo-meta-input">
+            </div>
+            <div style="margin-bottom:8px;">
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">⚠️ Observed Risk Level</label>
+              <select id="photo-risk-level" class="photo-meta-select">
+                <option value="LOW">🟢 Low — Normal Conditions</option>
+                <option value="MODERATE" selected>🟡 Moderate — Caution Advised</option>
+                <option value="HIGH">🟠 High — Dangerous</option>
+                <option value="CRITICAL">🔴 Critical — Evacuate Now</option>
+              </select>
+            </div>
+            <div style="margin-bottom:10px;">
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">📝 Field Observation Notes</label>
+              <textarea id="photo-notes" class="photo-meta-textarea" placeholder="Describe what you see: slope conditions, water flow, road damage..."></textarea>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button id="btn-submit-photo" class="route-find-btn" style="flex:1;">
+                <i data-lucide="send"></i> Submit Field Report
+              </button>
+              <button id="btn-cancel-photo" class="route-clear-btn">
+                <i data-lucide="x"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Photo Preview (pending upload) -->
+        <div id="photo-preview-staging" style="display:none;" class="panel-card" >
+          <div class="card-title">Selected Photos Preview</div>
+          <div id="photo-preview-grid" class="photo-preview-grid"></div>
+        </div>
+
+        <!-- Submitted Field Reports Gallery -->
+        <div class="panel-card">
+          <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+            <span>Citizen & Field-Officer Uploads</span>
+            <span id="report-count-badge" style="background:rgba(0,229,255,0.15);color:var(--primary-cyan);font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(0,229,255,0.3);">6 REPORTS</span>
+          </div>
+          <div id="field-reports-gallery" class="field-reports-gallery">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+      </div>
+
     </aside>
   </main>
 
@@ -401,6 +482,24 @@ git <!DOCTYPE html>
 
       <div id="route-legs-container" style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto;">
         <!-- Legs rendered here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Field Report Lightbox Modal -->
+  <div class="modal-backdrop" id="photo-lightbox-modal">
+    <div class="modal-content" style="max-width:600px;">
+      <div class="modal-header">
+        <h2 class="modal-title">
+          <i data-lucide="image" style="vertical-align:middle;margin-right:6px;"></i>
+          Field Report Detail
+        </h2>
+        <button class="close-btn" id="btn-close-lightbox">&times;</button>
+      </div>
+      <div id="lightbox-body" style="display:flex;flex-direction:column;gap:12px;">
+        <img id="lightbox-img" src="" alt="Field Report" style="width:100%;border-radius:8px;max-height:320px;object-fit:cover;">
+        <div id="lightbox-meta" style="font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
+        <div id="lightbox-notes" style="font-size:12px;color:var(--text-muted);line-height:1.6;"></div>
       </div>
     </div>
   </div>
