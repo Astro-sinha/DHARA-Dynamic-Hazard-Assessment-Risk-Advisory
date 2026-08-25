@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DHARA — ISRO Bhuvan Landslide Early Warning System</title>
+  
+  <!-- SEO & OpenGraph Meta Tags -->
+  <meta name="description" content="AI/ML Predictive Landslide Early Warning System for India using ISRO Bhuvan satellite telemetry, IMD precipitation data, and IoT edge sensors.">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Leaflet GIS Mapping CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- Authentication Guard (Redirects to /login if unauthenticated) -->
+  <script src="auth.js"></script>
+  <script>
+    Auth.guardPage();
+  </script>
+</head>
+<body>
+
+  <!-- Top Header Navigation -->
+  <header class="app-header">
+    <div class="brand-container">
+      <span class="isro-badge">ISRO BHUVAN GEO-PORTAL</span>
+      <h1 class="brand-title">DHARA</h1>
+      <span class="brand-sub">AI/ML Landslide Risk & Early Warning Platform</span>
+    </div>
+
+    <div class="header-status">
+      <div class="live-indicator">
+        <span class="pulse-dot"></span>
+        <span>ISRO SATELLITE TELEMETRY: ACTIVE</span>
+      </div>
+      <!-- Flask ML Backend Status Badge -->
+      <div class="flask-status-badge" id="flask-status-badge" title="Flask ML API Status">
+        <span class="flask-status-dot" id="flask-status-dot"></span>
+        <span id="flask-status-label">ML API: CHECKING…</span>
+      </div>
+      <button class="header-btn" id="btn-open-route-planner">
+        <i data-lucide="navigation"></i> Route Travel Advisory
+      </button>
+      <button class="header-btn" id="btn-sim-alert">
+        <i data-lucide="bell"></i> Broadcast SMS Alert
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Work Area -->
+  <main class="main-container">
+
+    <!-- Leaflet GIS Map Container (Full Map of India) -->
+    <div id="map-container">
+      <div id="map"></div>
+
+      <!-- Map Overlay Controls -->
+      <div class="map-floating-controls">
+        <div class="map-control-card">
+          <div class="map-control-title">
+            <span>GIS Map Layer (Bhuvan Telemetry)</span>
+            <i data-lucide="layers" style="width: 14px; height: 14px;"></i>
+          </div>
+          <button class="layer-select-btn active" id="layer-sat-hybrid">
+            <i data-lucide="map-pin"></i> Bhuvan Hybrid (Satellite + Road Network)
+          </button>
+          <button class="layer-select-btn" id="layer-sat">
+            <i data-lucide="globe"></i> ISRO High-Res Satellite Imagery
+          </button>
+          <button class="layer-select-btn" id="layer-topo">
+            <i data-lucide="mountain"></i> Survey of India Topographic DEM
+          </button>
+          <button class="layer-select-btn" id="layer-dark">
+            <i data-lucide="map"></i> GIS Dark Vector & Boundaries
+          </button>
+        </div>
+
+        <div class="map-control-card">
+          <div class="map-control-title">
+            <span>NE Regional & Micro-Grid Divisions</span>
+            <i data-lucide="shield-alert" style="width: 14px; height: 14px;"></i>
+          </div>
+          <div style="font-size: 11px; color: var(--primary-cyan); margin-bottom: 6px;">
+            <i data-lucide="map-pin" style="width: 12px; height: 12px; vertical-align: middle;"></i> Focus: Subdivisions & Transport Corridors
+          </div>
+          <div class="legend-grid">
+            <div class="legend-item"><span class="legend-color bg-low"></span> Low Hazard</div>
+            <div class="legend-item"><span class="legend-color bg-moderate"></span> Moderate</div>
+            <div class="legend-item"><span class="legend-color bg-high"></span> High Risk</div>
+            <div class="legend-item"><span class="legend-color bg-critical"></span> Critical Zone</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ISRO Bhuvan Style Telemetry & Live Lat/Lon Coordinate HUD Bar -->
+      <div class="bhuvan-hud-bar" id="bhuvan-hud-bar">
+        <span class="hud-item">DOP: <strong>03-12-2026</strong></span>
+        <span class="hud-divider">|</span>
+        <span class="hud-item">Lat: <strong id="hud-lat">25.2789° N</strong></span>
+        <span class="hud-divider">|</span>
+        <span class="hud-item">Lon: <strong id="hud-lon">91.7325° E</strong></span>
+        <span class="hud-divider">|</span>
+        <span class="hud-item">Zoom: <strong id="hud-zoom">7.2x</strong></span>
+      </div>
+    </div>
+
+
+    <!-- Sidebar Control & Intelligence Panel -->
+    <aside class="sidebar-panel">
+      <!-- Tabs Navigation -->
+      <div class="tab-navigation">
+        <button class="tab-btn active" data-tab="tab-predictor">
+          <i data-lucide="cpu"></i> Risk Engine
+        </button>
+        <button class="tab-btn" data-tab="tab-journey">
+          <i data-lucide="navigation-2"></i> Journey
+        </button>
+        <button class="tab-btn" data-tab="tab-stations">
+          <i data-lucide="radio"></i> Stations
+        </button>
+        <button class="tab-btn" data-tab="tab-analytics">
+          <i data-lucide="bar-chart-2"></i> Analytics
+        </button>
+        <button class="tab-btn" data-tab="tab-mlmodel">
+          <i data-lucide="brain-circuit"></i> Flask ML
+        </button>
+        <button class="tab-btn" data-tab="tab-fieldreports">
+          <i data-lucide="camera"></i> Field
+        </button>
+      </div>
+
+
+      <!-- TAB 1: AI Risk Engine Simulator -->
+      <div class="tab-content active" id="tab-predictor">
+        <div class="panel-card">
+          <div class="cell-info-header">
+            <div>
+              <div class="cell-name" id="selected-cell-id">NER-MEG-014</div>
+              <div class="cell-district" id="selected-cell-district">East Khasi Hills, Meghalaya</div>
+            </div>
+            <span class="risk-badge badge-critical" id="selected-risk-badge">CRITICAL</span>
+          </div>
+        </div>
+
+        <!-- Bhuvan Satellite Live Data Box -->
+        <div class="panel-card" style="background: rgba(0, 229, 255, 0.05); border-color: rgba(0, 229, 255, 0.3);">
+          <div class="card-title">
+            <span style="color: var(--primary-cyan); display: flex; align-items: center; gap: 6px;">
+              <i data-lucide="satellite"></i> ISRO Bhuvan Satellite Integration
+            </span>
+            <span style="font-size: 10px; color: var(--text-muted);" id="sat-status-tag">ONLINE</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
+            <div>Vegetation NDVI: <strong id="val-ndvi-display" style="color: #fff;">0.12</strong></div>
+            <div>Slope Disp: <strong id="val-disp-display" style="color: #fff;">2.1 mm</strong></div>
+          </div>
+        </div>
+
+        <!-- Interactive Environmental Sliders -->
+        <div class="panel-card">
+          <div class="card-title">Environmental Feature Parameters</div>
+
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>Antecedent 72h Rainfall (mm)</span>
+              <span class="slider-val" id="val-rain72">280 mm</span>
+            </div>
+            <input type="range" min="0" max="500" value="280" class="custom-slider" id="slider-rain72">
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>Peak Intensity (mm/hr)</span>
+              <span class="slider-val" id="val-intensity">48 mm/h</span>
+            </div>
+            <input type="range" min="0" max="100" value="48" class="custom-slider" id="slider-intensity">
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>Soil Moisture Saturation (%)</span>
+              <span class="slider-val" id="val-moisture">82 %</span>
+            </div>
+            <input type="range" min="0" max="100" value="82" class="custom-slider" id="slider-moisture">
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>Slope Gradient (Degrees)</span>
+              <span class="slider-val" id="val-slope">41°</span>
+            </div>
+            <input type="range" min="0" max="60" value="41" class="custom-slider" id="slider-slope">
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>Historical Incidents (5 Years)</span>
+              <span class="slider-val" id="val-history">3 events</span>
+            </div>
+            <input type="range" min="0" max="8" value="3" class="custom-slider" id="slider-history">
+          </div>
+        </div>
+
+        <!-- Engine Comparison Verdict -->
+        <div class="panel-card">
+          <div class="card-title">Dual-Engine Prediction Verdict</div>
+
+          <div class="engine-comparison-grid">
+            <!-- Flask Random Forest ML Engine -->
+            <div class="engine-box" id="engine-box-flask">
+              <div class="engine-title">
+                <i data-lucide="server" style="width:12px;height:12px;vertical-align:middle;"></i>
+                Flask RF Model
+              </div>
+              <div class="engine-result" id="cloud-ml-res" style="color: var(--risk-critical);">—</div>
+              <div class="engine-detail">Conf: <span id="cloud-ml-conf">—</span></div>
+              <div class="engine-detail" style="font-size:10px;color:var(--text-muted);margin-top:2px;" id="flask-engine-source">Connecting…</div>
+            </div>
+
+            <!-- Edge Offline Scorer -->
+            <div class="engine-box">
+              <div class="engine-title">
+                <i data-lucide="wifi-off" style="width:12px;height:12px;vertical-align:middle;"></i>
+                Edge Fallback
+              </div>
+              <div class="engine-result" id="edge-rule-res" style="color: var(--risk-critical);">—</div>
+              <div class="engine-detail">Score: <span id="edge-rule-score">— / 12</span></div>
+              <div class="engine-detail" style="font-size:10px;color:var(--text-muted);margin-top:2px;">Offline Rule-Based</div>
+            </div>
+          </div>
+
+          <!-- Flask ML Risk Probabilities Bar -->
+          <div id="ml-prob-bar-container" style="margin-top:10px;display:none;">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px;">Class Probabilities (Flask ML Model):</div>
+            <div id="ml-prob-bar" style="display:flex;gap:3px;height:14px;border-radius:4px;overflow:hidden;"></div>
+            <div id="ml-prob-legend" style="display:flex;justify-content:space-between;font-size:9px;margin-top:3px;color:var(--text-muted);"></div>
+          </div>
+        </div>
+
+        <!-- Dynamic SMS Alert Box -->
+        <div class="panel-card" id="alert-drawer-container">
+          <div class="card-title" style="color: var(--risk-critical);">
+            <span style="display: flex; align-items: center; gap: 6px;">
+              <i data-lucide="alert-triangle"></i> Emergency Alert Broadcast
+            </span>
+            <select id="select-alert-lang" style="background: rgba(0,0,0,0.5); color: #fff; border: 1px solid var(--border-color); border-radius: 4px; padding: 2px 6px; font-size: 11px;">
+              <option value="en">English</option>
+              <option value="as">Assamese (অসমীয়া)</option>
+              <option value="hi">Hindi (हिन्दी)</option>
+            </select>
+          </div>
+          <div class="alert-drawer">
+            <div class="alert-message" id="alert-msg-text">
+              URGENT: CRITICAL landslide risk in East Khasi Hills, Meghalaya (NER-MEG-014). Evacuate low-lying/slope-adjacent areas immediately if instructed.
+            </div>
+            <div class="alert-meta">
+              <span class="alert-tag">SMS Gateway</span>
+              <span class="alert-tag">App Push</span>
+              <span class="alert-tag">IVR Voice Alert</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- TAB 2: FROM → TO JOURNEY INTELLIGENCE PLANNER -->
+      <div class="tab-content" id="tab-journey">
+
+        <!-- From / To Input Card -->
+        <div class="panel-card" style="padding:14px;">
+          <div class="card-title" style="color:var(--primary-cyan);">
+            <span style="display:flex;align-items:center;gap:6px;"><i data-lucide="navigation-2"></i> Journey Risk Planner</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;">
+            Enter From & To locations to analyze landslide risk, road status, traffic, construction, and safest route.
+          </div>
+
+          <!-- FROM -->
+          <div class="journey-input-group">
+            <div class="journey-input-label"><span class="pin-dot dot-a">A</span> From (Origin)</div>
+            <div class="autocomplete-wrapper">
+              <input type="text" id="journey-from" class="journey-input" placeholder="e.g. Guwahati, Shillong, Gangtok...">
+              <div class="autocomplete-dropdown" id="from-dropdown"></div>
+            </div>
+          </div>
+
+          <!-- Swap Button -->
+          <div style="display:flex;justify-content:center;margin:6px 0;">
+            <button id="btn-swap-journey" class="swap-btn" title="Swap origin and destination">⇅</button>
+          </div>
+
+          <!-- TO -->
+          <div class="journey-input-group">
+            <div class="journey-input-label"><span class="pin-dot dot-b">B</span> To (Destination)</div>
+            <div class="autocomplete-wrapper">
+              <input type="text" id="journey-to" class="journey-input" placeholder="e.g. Cherrapunji, Kohima, Mangan...">
+              <div class="autocomplete-dropdown" id="to-dropdown"></div>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div style="display:flex;gap:8px;margin-top:12px;">
+            <button id="btn-find-route" class="route-find-btn">
+              <i data-lucide="search"></i> Analyze Route
+            </button>
+            <button id="btn-clear-route" class="route-clear-btn">
+              <i data-lucide="x"></i> Clear
+            </button>
+          </div>
+        </div>
+
+        <!-- Results Panel -->
+        <div id="journey-results-panel" style="display:none;">
+
+          <!-- Verdict Banner -->
+          <div class="panel-card" style="background:rgba(0,0,0,0.4);border-color:rgba(255,255,255,0.15);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <div>
+                <span style="font-size:11px;color:var(--text-muted);">Route:</span>
+                <span id="journey-from-label" style="font-weight:700;color:#fff;"> — </span>
+                <span style="color:var(--primary-cyan);font-size:14px;"> → </span>
+                <span id="journey-to-label" style="font-weight:700;color:#fff;"></span>
+              </div>
+            </div>
+            <div id="journey-verdict-text" style="font-size:16px;font-weight:800;margin-bottom:10px;"></div>
+
+            <!-- Quick Stats -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+              <div style="background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:8px;">
+                📏 Distance<br><strong id="journey-dist" style="color:var(--primary-cyan);font-size:14px;"></strong>
+              </div>
+              <div style="background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:8px;">
+                ⏱️ Est. Time<br><strong id="journey-time" style="color:var(--primary-cyan);font-size:14px;"></strong>
+              </div>
+            </div>
+
+            <!-- Flags Row -->
+            <div id="journey-flags" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;"></div>
+          </div>
+
+          <!-- Segment-by-Segment Breakdown -->
+          <div class="panel-card" style="padding:14px;">
+            <div class="card-title">Route Segment Analysis</div>
+            <div id="journey-segments" style="display:flex;flex-direction:column;gap:10px;"></div>
+          </div>
+
+          <!-- Advisory Text -->
+          <div class="panel-card" style="background:rgba(0,229,255,0.05);border-color:rgba(0,229,255,0.25);">
+            <div class="card-title" style="color:var(--primary-cyan);">
+              <i data-lucide="info"></i> Safest Route Advisory
+            </div>
+            <div id="journey-advisory" style="font-size:12px;line-height:1.6;color:#e2e8f0;"></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- TAB 3: Active Monitoring Stations List -->
+      <div class="tab-content" id="tab-stations">
+
+        <div class="panel-card">
+          <div class="card-title">National Monitoring Network Grid</div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+            Select any monitoring station in India to inspect live telemetry & hazard prediction.
+          </div>
+          <div id="station-list-container" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Station items populated via JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: Analytics & Feature Importance -->
+      <div class="tab-content" id="tab-analytics">
+        <div class="panel-card">
+          <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>Random Forest Feature Importance</span>
+            <span id="feature-importance-source" style="font-size:10px;color:var(--primary-cyan);">Loading…</span>
+          </div>
+          <div class="chart-box">
+            <canvas id="chart-feature-importance"></canvas>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="card-title">Soil Saturation vs Rainfall Hazard</div>
+          <div class="chart-box">
+            <canvas id="chart-rainfall-moisture"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Flask ML Model Info Tab -->
+      <div class="tab-content" id="tab-mlmodel">
+        <div class="panel-card" style="background: rgba(0,229,255,0.05); border-color: rgba(0,229,255,0.3);">
+          <div class="card-title" style="color:var(--primary-cyan);">
+            <i data-lucide="server"></i> Flask ML Backend Status
+          </div>
+          <div id="flask-model-status-block" style="font-size:12px;line-height:1.8;color:#e2e8f0;">
+            <div>Status: <strong id="flask-ml-status-text" style="color:var(--primary-cyan);">Connecting…</strong></div>
+            <div>Model Type: <strong id="flask-ml-model-type">—</strong></div>
+            <div>Label Source: <strong id="flask-ml-label-source" style="color:#10b981;">—</strong></div>
+            <div>Features: <strong id="flask-ml-features">—</strong></div>
+            <div>Risk Classes: <strong id="flask-ml-classes">—</strong></div>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="card-title">Model Evaluation (Test Set)</div>
+          <pre id="flask-eval-report" style="font-size:11px;color:#e2e8f0;line-height:1.6;white-space:pre-wrap;font-family:monospace;overflow-x:auto;">Fetching evaluation report…</pre>
+        </div>
+
+        <div class="panel-card">
+          <div class="card-title">Top 10 Predictive Features</div>
+          <div id="flask-feature-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+        </div>
+
+        <div class="panel-card" style="text-align:center;padding:14px;">
+          <a href="/api/health" target="_blank" class="route-find-btn" style="display:inline-flex;gap:6px;align-items:center;margin-bottom:8px;">
+            <i data-lucide="activity"></i> /api/health
+          </a>
+          <a href="/api/model/feature-importance" target="_blank" class="route-find-btn" style="display:inline-flex;gap:6px;align-items:center;">
+            <i data-lucide="list-ordered"></i> /api/model/feature-importance
+          </a>
+        </div>
+      </div>
+
+      <!-- TAB 5: Field Reporting & Real-Time Photo Uploads -->
+      <div class="tab-content" id="tab-fieldreports">
+
+        <!-- Upload Card -->
+        <div class="panel-card" style="padding:14px;">
+          <div class="card-title" style="color:var(--primary-cyan);">
+            <span style="display:flex;align-items:center;gap:6px;"><i data-lucide="camera"></i> Field Reporting — Live Photo Upload</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;">
+            Upload real-time field photos from citizens or officers. Photos are geotagged and displayed on the risk map.
+          </div>
+
+          <!-- Drag & Drop Upload Zone -->
+          <div id="photo-dropzone" class="photo-dropzone">
+            <i data-lucide="upload-cloud" style="width:32px;height:32px;color:var(--primary-cyan);margin-bottom:8px;"></i>
+            <div style="font-weight:700;font-size:13px;color:#fff;margin-bottom:4px;">Drag & Drop Photos Here</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">or click to browse · JPG, PNG, WEBP supported</div>
+            <div style="display:flex;gap:8px;justify-content:center;">
+              <label for="photo-file-input" class="upload-btn-label">
+                <i data-lucide="folder-open" style="width:13px;height:13px;"></i> Browse Files
+              </label>
+              <button id="btn-camera-capture" class="upload-btn-camera">
+                <i data-lucide="camera" style="width:13px;height:13px;"></i> Use Camera
+              </button>
+            </div>
+            <input type="file" id="photo-file-input" accept="image/*" multiple style="display:none;">
+            <input type="file" id="photo-camera-input" accept="image/*" capture="environment" style="display:none;">
+          </div>
+
+          <!-- Photo Metadata Form (hidden until photo selected) -->
+          <div id="photo-meta-form" style="display:none;margin-top:12px;">
+            <div style="margin-bottom:8px;">
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">📍 Location / Landmark</label>
+              <input type="text" id="photo-location" placeholder="e.g. Sohra Rd, Meghalaya" class="photo-meta-input">
+            </div>
+            <div style="margin-bottom:8px; display:flex; gap:8px;">
+              <div style="flex:1;">
+                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">🌐 Latitude (Auto from EXIF)</label>
+                <input type="number" id="photo-lat" step="any" placeholder="e.g. 25.27" class="photo-meta-input">
+              </div>
+              <div style="flex:1;">
+                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">🌐 Longitude (Auto from EXIF)</label>
+                <input type="number" id="photo-lon" step="any" placeholder="e.g. 91.73" class="photo-meta-input">
+              </div>
+            </div>
+            <div style="margin-bottom:8px;">
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">📅 Date/Time (Auto from EXIF)</label>
+              <input type="text" id="photo-date" placeholder="e.g. 2026-08-24 10:30 AM" class="photo-meta-input">
+            </div>
+            <div style="margin-bottom:8px;">
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">⚠️ Observed Risk Level</label>
+              <select id="photo-risk-level" class="photo-meta-select">
+                <option value="LOW">🟢 Low — Normal Conditions</option>
+                <option value="MODERATE" selected>🟡 Moderate — Caution Advised</option>
+                <option value="HIGH">🟠 High — Dangerous</option>
+                <option value="CRITICAL">🔴 Critical — Evacuate Now</option>
+              </select>
+            </div>
+            <div style="margin-bottom:10px;">
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">📝 Field Observation Notes</label>
+              <textarea id="photo-notes" class="photo-meta-textarea" placeholder="Describe what you see: slope conditions, water flow, road damage..."></textarea>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button id="btn-submit-photo" class="route-find-btn" style="flex:1;">
+                <i data-lucide="send"></i> Submit Field Report
+              </button>
+              <button id="btn-cancel-photo" class="route-clear-btn">
+                <i data-lucide="x"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Photo Preview (pending upload) -->
+        <div id="photo-preview-staging" style="display:none;" class="panel-card" >
+          <div class="card-title">Selected Photos Preview</div>
+          <div id="photo-preview-grid" class="photo-preview-grid"></div>
+        </div>
+
+        <!-- Submitted Field Reports Gallery -->
+        <div class="panel-card">
+          <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+            <span>Citizen & Field-Officer Uploads</span>
+            <span id="report-count-badge" style="background:rgba(0,229,255,0.15);color:var(--primary-cyan);font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(0,229,255,0.3);">6 REPORTS</span>
+          </div>
+          <div id="field-reports-gallery" class="field-reports-gallery">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+      </div>
+
+    </aside>
+  </main>
+
+  <!-- Route Travel Advisory Modal -->
+  <div class="modal-backdrop" id="route-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">
+          <i data-lucide="map-pin" style="vertical-align: middle; margin-right: 6px;"></i>
+          Tourist & Transport Route Hazard Advisory
+        </h2>
+        <button class="close-btn" id="btn-close-modal">&times;</button>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 6px;">Select National Highway / Tourist Route Corridor:</label>
+        <select id="select-route-corridor" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.5); color: #fff; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px;">
+          <option value="meg">Guwahati → Shillong → Cherrapunji Corridor (NH-6 / NH-106)</option>
+          <option value="sik">Siliguri → Gangtok → North Sikkim Highway (NH-10)</option>
+          <option value="utt">Rishikesh → Chamoli → Joshimath Pilgrimage Corridor (NH-7)</option>
+          <option value="ker">Kozhikode → Wayanad Ghat Pass (NH-766)</option>
+        </select>
+      </div>
+
+      <div class="panel-card" style="background: rgba(0,0,0,0.4);" id="route-verdict-box">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <span style="font-weight: 700; font-size: 15px;" id="route-name-title">Guwahati → Shillong → Cherrapunji</span>
+          <span class="risk-badge badge-critical" id="route-verdict-badge">CRITICAL</span>
+        </div>
+        <div style="font-size: 13px; color: #f3f4f6; line-height: 1.5;" id="route-advisory-desc">
+          Avoid trip — critical landslide risk near Shillong–Cherrapunji. Check back closer to your travel date or ask local authorities for an alternate route.
+        </div>
+      </div>
+
+      <div id="route-legs-container" style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto;">
+        <!-- Legs rendered here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Field Report Lightbox Modal -->
+  <div class="modal-backdrop" id="photo-lightbox-modal">
+    <div class="modal-content" style="max-width:600px;">
+      <div class="modal-header">
+        <h2 class="modal-title">
+          <i data-lucide="image" style="vertical-align:middle;margin-right:6px;"></i>
+          Field Report Detail
+        </h2>
+        <button class="close-btn" id="btn-close-lightbox">&times;</button>
+      </div>
+      <div id="lightbox-body" style="display:flex;flex-direction:column;gap:12px;">
+        <img id="lightbox-img" src="" alt="Field Report" style="width:100%;border-radius:8px;max-height:320px;object-fit:cover;">
+        <div id="lightbox-meta" style="font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
+        <div id="lightbox-notes" style="font-size:12px;color:var(--text-muted);line-height:1.6;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- State Administrator Emergency Broadcast Modal -->
+  <div class="modal-backdrop" id="sms-broadcast-modal">
+    <div class="modal-content" style="max-width:650px;">
+      <div class="modal-header">
+        <h2 class="modal-title" style="color:var(--primary-cyan);">
+          <i data-lucide="bell-ring" style="vertical-align:middle;margin-right:6px;"></i>
+          Emergency SMS & Disaster Portal Router
+        </h2>
+        <button class="close-btn" id="btn-close-sms-modal">&times;</button>
+      </div>
+      
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.5;">
+        Broadcast automated early warnings or directly connect with official State Disaster Management Authorities (SDMA) & Municipal Portals to escalate alerts and view real-time state advisories.
+      </div>
+
+      <!-- Current Alert Preview Box -->
+      <div class="panel-card" style="background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.3);margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:700;color:var(--risk-critical);margin-bottom:4px;display:flex;align-items:center;gap:6px;">
+          <i data-lucide="alert-triangle" style="width:14px;height:14px;"></i> LIVE BROADCAST MESSAGE
+        </div>
+        <div id="modal-sms-preview-text" style="font-size:12px;color:#fff;line-height:1.5;font-weight:500;">
+          URGENT: CRITICAL landslide risk detected. Evacuate low-lying areas immediately.
+        </div>
+      </div>
+
+      <!-- State Administrator Links Grid -->
+      <div style="font-size:12px;font-weight:700;color:#fff;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+        <i data-lucide="building-2" style="width:14px;height:14px;color:var(--primary-cyan);"></i> SELECT STATE DISASTER AUTHORITY PORTAL TO CONNECT:
+      </div>
+
+      <div class="state-portal-grid" id="state-portal-grid" style="display:grid;grid-template-columns:repeat(2, 1fr);gap:10px;max-height:260px;overflow-y:auto;padding-right:4px;">
+        <!-- Dynamically rendered state portal buttons -->
+      </div>
+
+      <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end;">
+        <button id="btn-trigger-broadcast-toast" class="route-find-btn" style="background:linear-gradient(135deg, #ef4444, #dc2626);">
+          <i data-lucide="send"></i> Dispatch SMS to All Registered Cell Towers
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.js"></script>
+  <script src="auth.js"></script>
+  <script src="risk_engine.js"></script>
+  <script src="flask_client.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>
