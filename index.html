@@ -24,6 +24,12 @@
 
   <!-- Custom Styles -->
   <link rel="stylesheet" href="styles.css">
+
+  <!-- Authentication Guard (Redirects to /login if unauthenticated) -->
+  <script src="auth.js"></script>
+  <script>
+    Auth.guardPage();
+  </script>
 </head>
 <body>
 
@@ -39,6 +45,11 @@
       <div class="live-indicator">
         <span class="pulse-dot"></span>
         <span>ISRO SATELLITE TELEMETRY: ACTIVE</span>
+      </div>
+      <!-- Flask ML Backend Status Badge -->
+      <div class="flask-status-badge" id="flask-status-badge" title="Flask ML API Status">
+        <span class="flask-status-dot" id="flask-status-dot"></span>
+        <span id="flask-status-label">ML API: CHECKING…</span>
       </div>
       <button class="header-btn" id="btn-open-route-planner">
         <i data-lucide="navigation"></i> Route Travel Advisory
@@ -123,6 +134,9 @@
         <button class="tab-btn" data-tab="tab-analytics">
           <i data-lucide="bar-chart-2"></i> Analytics
         </button>
+        <button class="tab-btn" data-tab="tab-mlmodel">
+          <i data-lucide="brain-circuit"></i> Flask ML
+        </button>
         <button class="tab-btn" data-tab="tab-fieldreports">
           <i data-lucide="camera"></i> Field
         </button>
@@ -203,19 +217,36 @@
         <!-- Engine Comparison Verdict -->
         <div class="panel-card">
           <div class="card-title">Dual-Engine Prediction Verdict</div>
-          
+
           <div class="engine-comparison-grid">
-            <div class="engine-box">
-              <div class="engine-title">Cloud ML Model</div>
-              <div class="engine-result" id="cloud-ml-res" style="color: var(--risk-critical);">CRITICAL</div>
-              <div class="engine-detail">Conf: <span id="cloud-ml-conf">92%</span></div>
+            <!-- Flask Random Forest ML Engine -->
+            <div class="engine-box" id="engine-box-flask">
+              <div class="engine-title">
+                <i data-lucide="server" style="width:12px;height:12px;vertical-align:middle;"></i>
+                Flask RF Model
+              </div>
+              <div class="engine-result" id="cloud-ml-res" style="color: var(--risk-critical);">—</div>
+              <div class="engine-detail">Conf: <span id="cloud-ml-conf">—</span></div>
+              <div class="engine-detail" style="font-size:10px;color:var(--text-muted);margin-top:2px;" id="flask-engine-source">Connecting…</div>
             </div>
 
+            <!-- Edge Offline Scorer -->
             <div class="engine-box">
-              <div class="engine-title">Edge Fallback Scorer</div>
-              <div class="engine-result" id="edge-rule-res" style="color: var(--risk-critical);">CRITICAL</div>
-              <div class="engine-detail">Score: <span id="edge-rule-score">11 / 12</span></div>
+              <div class="engine-title">
+                <i data-lucide="wifi-off" style="width:12px;height:12px;vertical-align:middle;"></i>
+                Edge Fallback
+              </div>
+              <div class="engine-result" id="edge-rule-res" style="color: var(--risk-critical);">—</div>
+              <div class="engine-detail">Score: <span id="edge-rule-score">— / 12</span></div>
+              <div class="engine-detail" style="font-size:10px;color:var(--text-muted);margin-top:2px;">Offline Rule-Based</div>
             </div>
+          </div>
+
+          <!-- Flask ML Risk Probabilities Bar -->
+          <div id="ml-prob-bar-container" style="margin-top:10px;display:none;">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px;">Class Probabilities (Flask ML Model):</div>
+            <div id="ml-prob-bar" style="display:flex;gap:3px;height:14px;border-radius:4px;overflow:hidden;"></div>
+            <div id="ml-prob-legend" style="display:flex;justify-content:space-between;font-size:9px;margin-top:3px;color:var(--text-muted);"></div>
           </div>
         </div>
 
@@ -354,7 +385,10 @@
       <!-- TAB 3: Analytics & Feature Importance -->
       <div class="tab-content" id="tab-analytics">
         <div class="panel-card">
-          <div class="card-title">Random Forest Feature Importance</div>
+          <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>Random Forest Feature Importance</span>
+            <span id="feature-importance-source" style="font-size:10px;color:var(--primary-cyan);">Loading…</span>
+          </div>
           <div class="chart-box">
             <canvas id="chart-feature-importance"></canvas>
           </div>
@@ -365,6 +399,41 @@
           <div class="chart-box">
             <canvas id="chart-rainfall-moisture"></canvas>
           </div>
+        </div>
+      </div>
+
+      <!-- Flask ML Model Info Tab -->
+      <div class="tab-content" id="tab-mlmodel">
+        <div class="panel-card" style="background: rgba(0,229,255,0.05); border-color: rgba(0,229,255,0.3);">
+          <div class="card-title" style="color:var(--primary-cyan);">
+            <i data-lucide="server"></i> Flask ML Backend Status
+          </div>
+          <div id="flask-model-status-block" style="font-size:12px;line-height:1.8;color:#e2e8f0;">
+            <div>Status: <strong id="flask-ml-status-text" style="color:var(--primary-cyan);">Connecting…</strong></div>
+            <div>Model Type: <strong id="flask-ml-model-type">—</strong></div>
+            <div>Label Source: <strong id="flask-ml-label-source" style="color:#10b981;">—</strong></div>
+            <div>Features: <strong id="flask-ml-features">—</strong></div>
+            <div>Risk Classes: <strong id="flask-ml-classes">—</strong></div>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="card-title">Model Evaluation (Test Set)</div>
+          <pre id="flask-eval-report" style="font-size:11px;color:#e2e8f0;line-height:1.6;white-space:pre-wrap;font-family:monospace;overflow-x:auto;">Fetching evaluation report…</pre>
+        </div>
+
+        <div class="panel-card">
+          <div class="card-title">Top 10 Predictive Features</div>
+          <div id="flask-feature-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+        </div>
+
+        <div class="panel-card" style="text-align:center;padding:14px;">
+          <a href="/api/health" target="_blank" class="route-find-btn" style="display:inline-flex;gap:6px;align-items:center;margin-bottom:8px;">
+            <i data-lucide="activity"></i> /api/health
+          </a>
+          <a href="/api/model/feature-importance" target="_blank" class="route-find-btn" style="display:inline-flex;gap:6px;align-items:center;">
+            <i data-lucide="list-ordered"></i> /api/model/feature-importance
+          </a>
         </div>
       </div>
 
@@ -563,7 +632,9 @@
   <!-- Scripts -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.js"></script>
+  <script src="auth.js"></script>
   <script src="risk_engine.js"></script>
+  <script src="flask_client.js"></script>
   <script src="app.js"></script>
 
 </body>

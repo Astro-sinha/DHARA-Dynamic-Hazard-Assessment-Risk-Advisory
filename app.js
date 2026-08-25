@@ -133,16 +133,18 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function recalculateRisk() {
-    const r72 = parseFloat(document.getElementById("slider-rain72").value);
+    const r72       = parseFloat(document.getElementById("slider-rain72").value);
     const intensity = parseFloat(document.getElementById("slider-intensity").value);
-    const moisture = parseFloat(document.getElementById("slider-moisture").value);
-    const slope = parseFloat(document.getElementById("slider-slope").value);
-    const history = parseInt(document.getElementById("slider-history").value);
-    document.getElementById("val-rain72").innerText = `${r72} mm`;
+    const moisture  = parseFloat(document.getElementById("slider-moisture").value);
+    const slope     = parseFloat(document.getElementById("slider-slope").value);
+    const history   = parseInt(document.getElementById("slider-history").value);
+
+    document.getElementById("val-rain72").innerText    = `${r72} mm`;
     document.getElementById("val-intensity").innerText = `${intensity} mm/h`;
-    document.getElementById("val-moisture").innerText = `${moisture} %`;
-    document.getElementById("val-slope").innerText = `${slope}°`;
-    document.getElementById("val-history").innerText = `${history} events`;
+    document.getElementById("val-moisture").innerText  = `${moisture} %`;
+    document.getElementById("val-slope").innerText     = `${slope}°`;
+    document.getElementById("val-history").innerText   = `${history} events`;
+
     const activeReading = {
       cell_id: currentStation.cell_id, district: currentStation.district,
       rainfall_24h_mm: Math.round(r72 * 0.4), rainfall_72h_mm: r72,
@@ -150,8 +152,63 @@ document.addEventListener("DOMContentLoaded", () => {
       ndvi: currentStation.ndvi, distance_to_road_m: currentStation.distance_to_road_m,
       historical_incidents_5y: history, soil_type_erodibility: currentStation.soil_type_erodibility
     };
-    const cloudPred = predictCloudMLRisk(activeReading);
+
+    // ── Edge rule-based fallback (always computed instantly) ────────────────
     const edgePred = predictEdgeRuleBasedRisk(activeReading);
+    const edgeResEl = document.getElementById("edge-rule-res");
+    edgeResEl.innerText = edgePred.risk_class;
+    edgeResEl.style.color = `var(--risk-${edgePred.risk_class.toLowerCase()})`;
+    document.getElementById("edge-rule-score").innerText = `${edgePred.score} / 12`;
+
+    // ── Try Flask ML first; fall back to local surrogate ───────────────────
+    const flaskParams = {
+      rainfall_72h_mm:         r72,
+      rainfall_intensity_mmhr: intensity,
+      soil_moisture_pct:       moisture,
+      slope_angle_deg:         slope,
+      historical_incidents_5y: history,
+      elevation:               currentStation.elevation || 1000,
+      lat:                     currentStation.lat,
+      lon:                     currentStation.lon,
+      cell_id:                 currentStation.cell_id,
+      district:                currentStation.district,
+    };
+
+    if (window.FlaskML && window.FlaskML.isConnected) {
+      window.FlaskML.predict(flaskParams).then(flaskResult => {
+        if (flaskResult) {
+          // Map Flask risk_level (Low/Medium/High) → UI risk class (LOW/MODERATE/HIGH/CRITICAL)
+          const levelMap = { "Low": "LOW", "Medium": "MODERATE", "High": "HIGH", "Critical": "CRITICAL" };
+          const riskClass = levelMap[flaskResult.risk_level] || flaskResult.risk_level.toUpperCase();
+          const confidence = Math.max(...Object.values(flaskResult.class_probabilities || {}));
+
+          document.getElementById("selected-cell-id").innerText = activeReading.cell_id;
+          document.getElementById("selected-cell-district").innerText = activeReading.district;
+          const badgeEl = document.getElementById("selected-risk-badge");
+          badgeEl.innerText   = riskClass;
+          badgeEl.className   = `risk-badge badge-${riskClass.toLowerCase()}`;
+          const cloudResEl = document.getElementById("cloud-ml-res");
+          cloudResEl.innerText    = riskClass;
+          cloudResEl.style.color  = `var(--risk-${riskClass.toLowerCase()})`;
+          document.getElementById("cloud-ml-conf").innerText = `${Math.round(confidence * 100)}%`;
+
+          // Extra Flask UI updates (source label, probability bar)
+          window.FlaskML.applyPredictionToUI(flaskResult);
+
+          // Alert message using Flask prediction
+          updateAlertMessage({ risk_class: riskClass, cell_id: activeReading.cell_id, district: activeReading.district });
+        } else {
+          _applyLocalPrediction(activeReading);
+        }
+      }).catch(() => _applyLocalPrediction(activeReading));
+    } else {
+      _applyLocalPrediction(activeReading);
+    }
+  }
+
+  /** Fallback: use local risk_engine.js predictCloudMLRisk surrogate */
+  function _applyLocalPrediction(activeReading) {
+    const cloudPred = predictCloudMLRisk(activeReading);
     document.getElementById("selected-cell-id").innerText = activeReading.cell_id;
     document.getElementById("selected-cell-district").innerText = activeReading.district;
     const badgeEl = document.getElementById("selected-risk-badge");
@@ -161,10 +218,8 @@ document.addEventListener("DOMContentLoaded", () => {
     cloudResEl.innerText = cloudPred.risk_class;
     cloudResEl.style.color = `var(--risk-${cloudPred.risk_class.toLowerCase()})`;
     document.getElementById("cloud-ml-conf").innerText = `${Math.round(cloudPred.confidence * 100)}%`;
-    const edgeResEl = document.getElementById("edge-rule-res");
-    edgeResEl.innerText = edgePred.risk_class;
-    edgeResEl.style.color = `var(--risk-${edgePred.risk_class.toLowerCase()})`;
-    document.getElementById("edge-rule-score").innerText = `${edgePred.score} / 12`;
+    const sourceEl = document.getElementById("flask-engine-source");
+    if (sourceEl) { sourceEl.textContent = "Local Fallback (Offline)"; sourceEl.style.color = "#f59e0b"; }
     updateAlertMessage(cloudPred);
   }
 
@@ -193,21 +248,37 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // ── STATION LIST ───────────────────────────────────────────────────────────
-  function renderStationsList() {
+  function renderStationsList(mlStations) {
     const container = document.getElementById("station-list-container");
     container.innerHTML = "";
-    PRESET_STATIONS.forEach(st => {
-      const pred = predictCloudMLRisk(st);
+
+    // If Flask provided enriched stations, use those; otherwise local
+    const stationData = mlStations || PRESET_STATIONS;
+    const levelMap = { "Low": "LOW", "Medium": "MODERATE", "High": "HIGH", "Critical": "CRITICAL" };
+
+    stationData.forEach(st => {
+      // Determine the risk class — could be from Flask (risk_level) or local model
+      let riskClass, riskSource;
+      if (st.risk_level) {
+        riskClass  = levelMap[st.risk_level] || st.risk_level.toUpperCase();
+        riskSource = "Flask ML";
+      } else {
+        const pred = predictCloudMLRisk(st);
+        riskClass  = pred.risk_class;
+        riskSource = "Local";
+      }
+
       const div = document.createElement("div");
       div.className = "panel-card";
       div.style.cssText = "padding:10px 14px;margin:0;cursor:pointer;";
       div.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div>
           <div style="font-weight:700;font-size:13px;color:var(--primary-cyan);">${st.cell_id}</div>
-          <div style="font-size:12px;font-weight:600;color:#fff;">${st.subdivision}</div>
+          <div style="font-size:12px;font-weight:600;color:#fff;">${st.subdivision || st.district}</div>
           <div style="font-size:11px;color:var(--text-muted);">${st.district}, ${st.state}</div>
+          <div style="font-size:10px;color:var(--text-dim);margin-top:2px;">${riskSource} Inference</div>
         </div>
-        <span class="risk-badge badge-${pred.risk_class.toLowerCase()}">${pred.risk_class}</span>
+        <span class="risk-badge badge-${riskClass.toLowerCase()}">${riskClass}</span>
       </div>`;
       div.addEventListener("click", () => {
         selectStation(st);
@@ -216,7 +287,17 @@ document.addEventListener("DOMContentLoaded", () => {
       container.appendChild(div);
     });
   }
-  renderStationsList();
+
+  // Initial local render; Flask-enriched render fires when Flask connects
+  renderStationsList(null);
+
+  // If Flask is available after initial load, re-render with live ML scores
+  setTimeout(async () => {
+    if (window.FlaskML && window.FlaskML.isConnected) {
+      const stations = await window.FlaskML.getStations();
+      if (stations) renderStationsList(stations);
+    }
+  }, 1500);
 
   // ── OLD ROUTE MODAL ────────────────────────────────────────────────────────
   const modal = document.getElementById("route-modal");
@@ -1177,6 +1258,135 @@ document.addEventListener("DOMContentLoaded", () => {
     fileInput.value = "";
     cameraInput.value = "";
   });
+
+  // ── ANALYTICS CHARTS ───────────────────────────────────────────────────────
+
+  // Static feature labels and importances (local fallback from model evaluation)
+  const LOCAL_FEATURE_IMPORTANCES = [
+    { feature: "rain_cum_15d",                   importance: 0.1512 },
+    { feature: "rain_cum_30d",                   importance: 0.1384 },
+    { feature: "rain_cum_7d",                    importance: 0.1191 },
+    { feature: "soil_moisture_28_100cm_mean",     importance: 0.0984 },
+    { feature: "rain_cum_3d",                    importance: 0.0843 },
+    { feature: "rain_mm_sum",                    importance: 0.0712 },
+    { feature: "soil_moisture_100_255cm_mean",    importance: 0.0621 },
+    { feature: "rainy_days_30d",                 importance: 0.0522 },
+    { feature: "rainy_days_15d",                 importance: 0.0481 },
+    { feature: "rain_intensity_ratio",            importance: 0.0401 },
+    { feature: "rain_mm_max_hourly",             importance: 0.0342 },
+    { feature: "wind_rain_interaction",           importance: 0.0281 },
+    { feature: "month",                          importance: 0.0241 },
+    { feature: "is_monsoon",                     importance: 0.0192 },
+    { feature: "elevation",                      importance: 0.0171 },
+  ].reverse();  // Chart.js renders bottom-to-top for horizontal bar
+
+  const featureCtx = document.getElementById("chart-feature-importance");
+  if (featureCtx) {
+    const featureChart = new Chart(featureCtx, {
+      type: "bar",
+      data: {
+        labels:   LOCAL_FEATURE_IMPORTANCES.map(f => f.feature.replace(/_/g, " ")),
+        datasets: [{
+          label:           "Feature Importance (%)",
+          data:            LOCAL_FEATURE_IMPORTANCES.map(f => parseFloat((f.importance * 100).toFixed(2))),
+          backgroundColor: LOCAL_FEATURE_IMPORTANCES.map((_, i) =>
+            `hsla(${195 + i * 4}, 90%, 55%, 0.82)`
+          ),
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` ${ctx.parsed.x.toFixed(2)}%`
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: "#9ca3af", font: { family: "Outfit" } },
+            grid:  { color: "rgba(255,255,255,0.06)" },
+            title: { display: true, text: "Importance (%)", color: "#9ca3af" }
+          },
+          y: {
+            ticks: { color: "#e2e8f0", font: { size: 11, family: "Outfit" } },
+            grid:  { color: "rgba(255,255,255,0.04)" }
+          }
+        }
+      }
+    });
+
+    // Set source to local initially
+    const srcEl = document.getElementById("feature-importance-source");
+    if (srcEl) srcEl.textContent = "Local Static (Offline)";
+
+    // Attempt to upgrade chart with live Flask data (after a short delay for Flask init)
+    setTimeout(async () => {
+      if (window.FlaskML && window.FlaskML.isConnected) {
+        await window.FlaskML.updateFeatureImportanceChart(featureChart);
+      }
+    }, 2000);
+  }
+
+  // ── Soil Moisture vs Rainfall Hazard Scatter ────────────────────────────────
+  const scatterCtx = document.getElementById("chart-rainfall-moisture");
+  if (scatterCtx) {
+    // Generate scatter data from preset stations using local surrogate model
+    const scatterData = PRESET_STATIONS.map(st => {
+      const pred = predictCloudMLRisk(st);
+      const RISK_COLORS_HEX = { LOW: "#10b981", MODERATE: "#f59e0b", HIGH: "#f97316", CRITICAL: "#ef4444" };
+      return {
+        x: st.rainfall_72h_mm,
+        y: st.soil_moisture_pct,
+        riskClass: pred.risk_class,
+        label: st.cell_id,
+        color: RISK_COLORS_HEX[pred.risk_class] || "#9ca3af",
+      };
+    });
+    new Chart(scatterCtx, {
+      type: "scatter",
+      data: {
+        datasets: [{
+          label: "Monitoring Stations",
+          data:  scatterData.map(d => ({ x: d.x, y: d.y, label: d.label })),
+          backgroundColor: scatterData.map(d => d.color + "cc"),
+          borderColor:     scatterData.map(d => d.color),
+          pointRadius: 7,
+          pointHoverRadius: 10,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => `${scatterData[ctx.dataIndex]?.label || ""} — Rain: ${ctx.parsed.x}mm, Moisture: ${ctx.parsed.y}%`
+            }
+          }
+        },
+        scales: {
+          x: {
+            title: { display: true, text: "72h Antecedent Rainfall (mm)", color: "#9ca3af" },
+            ticks: { color: "#9ca3af" },
+            grid:  { color: "rgba(255,255,255,0.06)" }
+          },
+          y: {
+            title: { display: true, text: "Soil Moisture (%)", color: "#9ca3af" },
+            ticks: { color: "#9ca3af" },
+            grid:  { color: "rgba(255,255,255,0.06)" }
+          }
+        }
+      }
+    });
+  }
+
+  // ── Initial risk calculation ───────────────────────────────────────────────
+  recalculateRisk();
 
   // ── TOAST ──────────────────────────────────────────────────────────────────
   function showToast(msg) {

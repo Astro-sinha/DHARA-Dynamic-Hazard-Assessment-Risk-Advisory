@@ -1,0 +1,13 @@
+Label source: real
+Accuracy: 0.722
+Macro F1: 0.362
+
+              precision    recall  f1-score   support
+
+         Low       0.93      0.77      0.84      1983
+      Medium       0.10      0.47      0.17       116
+        High       0.12      0.05      0.07       100
+
+    accuracy                           0.72      2199
+   macro avg       0.38      0.43      0.36      2199
+weighted avg       0.85      0.72      0.77      2199

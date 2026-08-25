@@ -1,0 +1,41 @@
+{
+  "feature_columns": [
+    "rain_mm_sum",
+    "rain_mm_max_hourly",
+    "precip_mm_sum",
+    "soil_moisture_28_100cm_mean",
+    "soil_moisture_100_255cm_mean",
+    "temp_c_mean",
+    "wet_hours",
+    "wind_speed_mean",
+    "wind_speed_max",
+    "soil_temp_deep_mean",
+    "rain_cum_3d",
+    "rain_cum_7d",
+    "rain_cum_15d",
+    "rain_cum_30d",
+    "rainy_days_3d",
+    "rainy_days_7d",
+    "rainy_days_15d",
+    "rainy_days_30d",
+    "soil_moisture_28_100cm_chg_3d",
+    "soil_moisture_100_255cm_chg_3d",
+    "rain_intensity_ratio",
+    "wind_rain_interaction",
+    "soil_temp_deep_chg_3d",
+    "elevation",
+    "location_id_encoded",
+    "month",
+    "is_monsoon"
+  ],
+  "risk_labels": {
+    "0": "Low",
+    "1": "Medium",
+    "2": "High"
+  },
+  "label_source": "real",
+  "location_encoding": {
+    "25.69N_94.11E": 0,
+    "27.52N_88.59E": 1
+  }
+}
