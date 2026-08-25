@@ -2,3 +2,8 @@ numpy
 pandas
 requests
 scikit-learn
+os
+json
+requests
+flask
+seaborn
