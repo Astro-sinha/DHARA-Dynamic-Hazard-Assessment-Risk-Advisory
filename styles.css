@@ -1045,7 +1045,48 @@ body {
   box-shadow: 0 0 10px rgba(245, 158, 11, 0.8);
   animation: markerPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+}
 @keyframes markerPop {
   from { transform: scale(0); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
+}
+
+/* State Portal Selector Buttons */
+.state-portal-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-decoration: none;
+  color: var(--text-main);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+.state-portal-card:hover {
+  background: rgba(0, 229, 255, 0.1);
+  border-color: var(--primary-cyan);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(0, 229, 255, 0.15);
+}
+.state-portal-card .state-name {
+  font-weight: 700;
+  font-size: 13px;
+  color: #fff;
+}
+.state-portal-card .portal-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.state-portal-card .external-icon {
+  color: var(--primary-cyan);
+  opacity: 0.7;
+  transition: opacity 0.2s, transform 0.2s;
+}
+.state-portal-card:hover .external-icon {
+  opacity: 1;
+  transform: translateX(2px) translateY(-2px);
 }

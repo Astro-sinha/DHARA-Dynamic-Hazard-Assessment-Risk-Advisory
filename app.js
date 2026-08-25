@@ -268,12 +268,62 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   document.getElementById("select-route-corridor").addEventListener("change", evaluateSelectedRoute);
 
+  // ── STATE DISASTER MANAGEMENT AUTHORITY (SDMA) DIRECTORY ─────────────────
+  const STATE_SDMA_PORTALS = [
+    { state: "Assam", title: "Assam State Disaster Management Authority (ASDMA)", url: "https://asdma.assam.gov.in/" },
+    { state: "Sikkim", title: "Gangtok Municipal Corp / Sikkim SDMA", url: "https://gmc.sikkim.gov.in/" },
+    { state: "Meghalaya", title: "Meghalaya State Disaster Management Authority", url: "https://msdma.gov.in/" },
+    { state: "Uttarakhand", title: "Uttarakhand State Disaster Management Authority (USDMA)", url: "https://usdma.uk.gov.in/" },
+    { state: "Kerala", title: "Kerala State Disaster Management Authority (KSDMA)", url: "https://ksdma.kerala.gov.in/" },
+    { state: "Himachal Pradesh", title: "Himachal Pradesh SDMA Portal", url: "https://hpsdma.nic.in/" },
+    { state: "Mizoram", title: "Mizoram Disaster Management & Rehabilitation", url: "https://dmr.mizoram.gov.in/" },
+    { state: "Arunachal Pradesh", title: "Arunachal Pradesh Disaster Management Dept", url: "https://arunachalpradesh.gov.in/" },
+    { state: "Nagaland", title: "Nagaland State Disaster Management Authority (NSDMA)", url: "https://nsdma.nagaland.gov.in/" },
+    { state: "Manipur", title: "Manipur Relief & Disaster Management Department", url: "https://manipur.gov.in/" },
+    { state: "West Bengal", title: "West Bengal Disaster Management & Civil Defence", url: "https://wbdmd.gov.in/" },
+    { state: "Tripura", title: "Tripura State Disaster Management Authority", url: "https://tripura.gov.in/" }
+  ];
+
+  const smsModal = document.getElementById("sms-broadcast-modal");
+  const btnCloseSmsModal = document.getElementById("btn-close-sms-modal");
+
+  function renderStatePortalGrid() {
+    const grid = document.getElementById("state-portal-grid");
+    grid.innerHTML = "";
+    STATE_SDMA_PORTALS.forEach(portal => {
+      const card = document.createElement("a");
+      card.className = "state-portal-card";
+      card.href = portal.url;
+      card.target = "_blank";
+      card.rel = "noopener noreferrer";
+      card.innerHTML = `
+        <div>
+          <div class="state-name">🏛️ ${portal.state}</div>
+          <div class="portal-sub">${portal.title}</div>
+        </div>
+        <i data-lucide="external-link" class="external-icon" style="width:16px;height:16px;"></i>
+      `;
+      grid.appendChild(card);
+    });
+    if (window.lucide) window.lucide.createIcons();
+  }
+  renderStatePortalGrid();
+
   document.getElementById("btn-sim-alert").addEventListener("click", () => {
     const pred = predictCloudMLRisk(currentStation);
     const alertData = buildAlert(pred, document.getElementById("select-alert-lang").value) || {
-      message: `TEST ALERT: Risk in ${currentStation.district} is ${pred.risk_class}. All systems operational.`
+      message: `ALERT: Risk level in ${currentStation.district} (${currentStation.cell_id}) is currently ${pred.risk_class}. Standard safety precautions apply.`
     };
-    alert(`[ISRO BHUVAN EMERGENCY SMS BROADCAST]\n\n${alertData.message}`);
+    document.getElementById("modal-sms-preview-text").innerText = alertData.message;
+    smsModal.classList.add("open");
+  });
+
+  btnCloseSmsModal.addEventListener("click", () => smsModal.classList.remove("open"));
+  smsModal.addEventListener("click", e => { if (e.target === smsModal) smsModal.classList.remove("open"); });
+
+  document.getElementById("btn-trigger-broadcast-toast").addEventListener("click", () => {
+    smsModal.classList.remove("open");
+    showToast("📡 Emergency SMS broadcast dispatched to all registered state cell towers.");
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -431,34 +481,88 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   ];
 
-  // ── AUTOCOMPLETE LOGIC ────────────────────────────────────────────────────
+  // ── DYNAMIC GEONAMES / NOMINATIM GEOCODING (ALL CITIES, TOWNS, VILLAGES IN INDIA) ──
+  let debounceTimers = {};
+
   function setupAutocomplete(inputId, dropdownId, onSelect) {
     const input = document.getElementById(inputId);
     const dropdown = document.getElementById(dropdownId);
+
     input.addEventListener("input", () => {
-      const q = input.value.toLowerCase().trim();
-      dropdown.innerHTML = "";
-      if (q.length < 2) { dropdown.style.display = "none"; return; }
-      const matches = LOCATION_DATABASE.filter(loc =>
-        loc.name.toLowerCase().includes(q) || loc.state.toLowerCase().includes(q)
-      ).slice(0, 8);
-      if (!matches.length) { dropdown.style.display = "none"; return; }
-      matches.forEach(loc => {
-        const item = document.createElement("div");
-        item.className = "autocomplete-item";
-        item.innerHTML = `<span class="ac-name">${loc.name}</span><span class="ac-state">${loc.state}</span>`;
-        item.addEventListener("click", () => {
-          input.value = loc.name;
-          dropdown.style.display = "none";
-          onSelect(loc);
-        });
-        dropdown.appendChild(item);
-      });
-      dropdown.style.display = "block";
+      const q = input.value.trim();
+      if (debounceTimers[inputId]) clearTimeout(debounceTimers[inputId]);
+
+      if (q.length < 2) {
+        dropdown.style.display = "none";
+        dropdown.innerHTML = "";
+        return;
+      }
+
+      // First search local preset database immediately for instant response
+      const localMatches = LOCATION_DATABASE.filter(loc =>
+        loc.name.toLowerCase().includes(q.toLowerCase()) || loc.state.toLowerCase().includes(q.toLowerCase())
+      ).slice(0, 5);
+
+      renderDropdownItems(localMatches, dropdown, input, onSelect, "preset");
+
+      // Debounce Nominatim API call (300ms) to fetch ANY village/city/landmark in India
+      debounceTimers[inputId] = setTimeout(() => {
+        fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=in&q=${encodeURIComponent(q)}&limit=8&addressdetails=1`)
+          .then(res => res.json())
+          .then(data => {
+            if (!data || !data.length) return;
+            const apiResults = data.map(item => {
+              const addr = item.address || {};
+              const placeName = addr.village || addr.suburb || addr.town || addr.city || addr.county || item.display_name.split(",")[0];
+              const stateName = addr.state || addr.state_district || "India";
+              const detailLabel = item.display_name;
+              return {
+                name: placeName,
+                displayName: detailLabel,
+                state: stateName,
+                lat: parseFloat(item.lat),
+                lon: parseFloat(item.lon),
+                type: item.type || "location"
+              };
+            });
+            renderDropdownItems(apiResults, dropdown, input, onSelect, "api");
+          })
+          .catch(() => {
+            // Silently fall back to preset database if offline
+          });
+      }, 300);
     });
+
     document.addEventListener("click", e => {
       if (!input.contains(e.target) && !dropdown.contains(e.target)) dropdown.style.display = "none";
     });
+  }
+
+  function renderDropdownItems(items, dropdown, input, onSelect, source) {
+    if (!items || !items.length) {
+      if (source === "preset" && !dropdown.children.length) dropdown.style.display = "none";
+      return;
+    }
+    dropdown.innerHTML = "";
+    items.forEach(loc => {
+      const item = document.createElement("div");
+      item.className = "autocomplete-item";
+      const displayName = loc.displayName || `${loc.name}, ${loc.state}`;
+      item.innerHTML = `
+        <div>
+          <span class="ac-name">📍 ${loc.name}</span>
+          <div style="font-size:10px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;">${displayName}</div>
+        </div>
+        <span class="ac-state" style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(0,229,255,0.1);color:var(--primary-cyan);">${loc.state}</span>
+      `;
+      item.addEventListener("click", () => {
+        input.value = loc.name;
+        dropdown.style.display = "none";
+        onSelect(loc);
+      });
+      dropdown.appendChild(item);
+    });
+    dropdown.style.display = "block";
   }
 
   let fromLocation = null, toLocation = null;
@@ -531,14 +635,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const segments = findRelevantSegments(fromLocation, toLocation);
     const resultsPanel = document.getElementById("journey-results-panel");
 
-    // If no matching segments, generate synthetic route analysis from the nearest station
+    // If no matching predefined corridors, generate intelligent route analysis based on nearest telemetry station
+    const nearestSt = findNearestStation((fromLocation.lat + toLocation.lat) / 2, (fromLocation.lon + toLocation.lon) / 2);
     const activeSegments = segments.length > 0 ? segments : [{
-      name: `${fromLocation.name} → ${toLocation.name} Route`,
+      name: `${fromLocation.name} → ${toLocation.name} Highway Segment`,
       coords: [[fromLocation.lat, fromLocation.lon], [toLocation.lat, toLocation.lon]],
-      road_status: "clear", under_construction: false,
-      traffic_level: "moderate", distance_km: Math.round(haversineKm(fromLocation, toLocation)),
-      duration_min: Math.round(haversineKm(fromLocation, toLocation) * 1.5),
-      station_idx: 0
+      road_status: nearestSt.rainfall_72h_mm > 250 ? "blocked" : nearestSt.rainfall_72h_mm > 150 ? "partial" : "clear",
+      under_construction: false,
+      traffic_level: "moderate",
+      distance_km: Math.max(5, Math.round(haversineKm(fromLocation, toLocation))),
+      duration_min: Math.max(10, Math.round(haversineKm(fromLocation, toLocation) * 1.6)),
+      station_idx: nearestSt.idx
     }];
 
     // Build route on map
@@ -633,6 +740,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const R = 6371, dLat = (b.lat - a.lat) * Math.PI / 180, dLon = (b.lon - a.lon) * Math.PI / 180;
     const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
     return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+  }
+
+  function findNearestStation(lat, lon) {
+    let minDistance = Infinity;
+    let closestIndex = 0;
+    PRESET_STATIONS.forEach((st, idx) => {
+      const dist = haversineKm({ lat, lon }, { lat: st.lat, lon: st.lon });
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestIndex = idx;
+      }
+    });
+    return { ...PRESET_STATIONS[closestIndex], idx: closestIndex };
   }
 
   function generateJourneyAdvisory(riskClass, from, to, hasBlocked, hasConstruction) {
@@ -862,7 +982,31 @@ document.addEventListener("DOMContentLoaded", () => {
   function handleFiles(files) {
     const imageFiles = files.filter(f => f.type.startsWith("image/"));
     if (!imageFiles.length) return;
+    
+    // Clear out form inputs initially
+    document.getElementById("photo-lat").value = "";
+    document.getElementById("photo-lon").value = "";
+    document.getElementById("photo-date").value = "";
+
     imageFiles.forEach(file => {
+      // 1. Read EXIF Data asynchronously
+      if (window.exifr) {
+        exifr.parse(file).then(exifData => {
+          if (exifData) {
+            if (exifData.latitude && exifData.longitude) {
+              document.getElementById("photo-lat").value = exifData.latitude.toFixed(6);
+              document.getElementById("photo-lon").value = exifData.longitude.toFixed(6);
+            }
+            if (exifData.DateTimeOriginal) {
+              document.getElementById("photo-date").value = new Date(exifData.DateTimeOriginal).toLocaleString();
+            } else if (file.lastModified) {
+              document.getElementById("photo-date").value = new Date(file.lastModified).toLocaleString();
+            }
+          }
+        }).catch(err => console.log("EXIF parsing error:", err));
+      }
+
+      // 2. Read Image for preview
       const reader = new FileReader();
       reader.onload = e => {
         stagedFiles.push({ file, dataUrl: e.target.result });
@@ -896,18 +1040,94 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // ── GEOTAG WATERMARK GENERATOR ────────────────────────────────────────────
+  function generateGeotagWatermark(dataUrl, locationStr, lat, lon, dateStr) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        
+        // Draw original image
+        ctx.drawImage(img, 0, 0);
+
+        // Watermark dimensions
+        const barHeight = Math.max(120, img.height * 0.2); // Responsive bar height
+        const fontSize = Math.max(16, Math.floor(img.width * 0.035));
+        const padding = fontSize * 1.2;
+
+        // Draw translucent dark bar at the bottom
+        ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+        ctx.fillRect(0, img.height - barHeight, img.width, barHeight);
+
+        // Text setup
+        ctx.fillStyle = "#ffffff";
+        ctx.font = `bold ${fontSize + 4}px Inter, sans-serif`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        
+        let currentY = img.height - barHeight + padding;
+        
+        // 1. Location
+        ctx.fillText(`📍 ${locationStr}`, padding, currentY);
+        currentY += fontSize + 12;
+
+        // 2. Lat / Lon
+        ctx.font = `${fontSize}px Inter, sans-serif`;
+        ctx.fillStyle = "#cbd5e1";
+        const latLonStr = `Lat ${lat.toFixed(6)}°  |  Long ${lon.toFixed(6)}°`;
+        ctx.fillText(latLonStr, padding, currentY);
+        currentY += fontSize + 10;
+
+        // 3. Date / Time
+        ctx.fillText(`🕒 ${dateStr}`, padding, currentY);
+
+        // 4. Logo / Branding (Bottom Right)
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#00e5ff"; // Primary cyan
+        ctx.font = `bold ${fontSize + 2}px Outfit, sans-serif`;
+        ctx.fillText("ISRO BHUVAN DHARA", img.width - padding, img.height - barHeight + padding);
+        
+        resolve(canvas.toDataURL("image/jpeg", 0.9));
+      };
+      img.onerror = () => resolve(dataUrl); // Fallback to original if error
+      img.src = dataUrl;
+    });
+  }
+
   // ── SUBMIT FIELD REPORT ───────────────────────────────────────────────────
-  document.getElementById("btn-submit-photo").addEventListener("click", () => {
+  document.getElementById("btn-submit-photo").addEventListener("click", async () => {
     if (!stagedFiles.length) return;
     const location = document.getElementById("photo-location").value.trim() || "Unknown Location";
     const riskLevel = document.getElementById("photo-risk-level").value;
     const notes = document.getElementById("photo-notes").value.trim();
+    
+    // Read from lat/lon/date inputs (these might be auto-filled by EXIF or manually typed)
+    let latVal = parseFloat(document.getElementById("photo-lat").value);
+    let lonVal = parseFloat(document.getElementById("photo-lon").value);
+    const dateVal = document.getElementById("photo-date").value.trim() || "just now";
 
-    // Pick location coords from nearest matching station
-    const matchedStation = PRESET_STATIONS.find(st =>
-      location.toLowerCase().includes(st.state.toLowerCase()) ||
-      location.toLowerCase().includes(st.district.toLowerCase().split(" ")[0])
-    ) || PRESET_STATIONS[Math.floor(Math.random() * PRESET_STATIONS.length)];
+    // If lat/lon are missing, fallback to picking coords from nearest matching station
+    if (isNaN(latVal) || isNaN(lonVal)) {
+      const matchedStation = PRESET_STATIONS.find(st =>
+        location.toLowerCase().includes(st.state.toLowerCase()) ||
+        location.toLowerCase().includes(st.district.toLowerCase().split(" ")[0])
+      ) || PRESET_STATIONS[Math.floor(Math.random() * PRESET_STATIONS.length)];
+      
+      latVal = matchedStation.lat + (Math.random() - 0.5) * 0.05;
+      lonVal = matchedStation.lon + (Math.random() - 0.5) * 0.05;
+    }
+
+    // Generate watermarked image
+    const watermarkedDataUrl = await generateGeotagWatermark(
+      stagedFiles[0].dataUrl, 
+      location, 
+      latVal, 
+      lonVal, 
+      dateVal
+    );
 
     // Add a report for the first uploaded image
     const newReport = {
@@ -915,11 +1135,11 @@ document.addEventListener("DOMContentLoaded", () => {
       location,
       riskLevel,
       notes,
-      time: "just now",
-      imgSrc: stagedFiles[0].dataUrl,
+      time: dateVal,
+      imgSrc: watermarkedDataUrl,
       gradient: CARD_GRADIENTS[0],
-      lat: matchedStation.lat + (Math.random() - 0.5) * 0.05,
-      lon: matchedStation.lon + (Math.random() - 0.5) * 0.05,
+      lat: latVal,
+      lon: lonVal,
       pending: true
     };
     fieldReports.unshift(newReport);
@@ -931,6 +1151,9 @@ document.addEventListener("DOMContentLoaded", () => {
     stagingDiv.style.display = "none";
     document.getElementById("photo-location").value = "";
     document.getElementById("photo-notes").value = "";
+    document.getElementById("photo-lat").value = "";
+    document.getElementById("photo-lon").value = "";
+    document.getElementById("photo-date").value = "";
     document.getElementById("photo-risk-level").value = "MODERATE";
     fileInput.value = "";
     cameraInput.value = "";

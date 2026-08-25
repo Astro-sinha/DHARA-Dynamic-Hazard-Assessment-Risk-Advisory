@@ -403,6 +403,20 @@
               <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">📍 Location / Landmark</label>
               <input type="text" id="photo-location" placeholder="e.g. Sohra Rd, Meghalaya" class="photo-meta-input">
             </div>
+            <div style="margin-bottom:8px; display:flex; gap:8px;">
+              <div style="flex:1;">
+                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">🌐 Latitude (Auto from EXIF)</label>
+                <input type="number" id="photo-lat" step="any" placeholder="e.g. 25.27" class="photo-meta-input">
+              </div>
+              <div style="flex:1;">
+                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">🌐 Longitude (Auto from EXIF)</label>
+                <input type="number" id="photo-lon" step="any" placeholder="e.g. 91.73" class="photo-meta-input">
+              </div>
+            </div>
+            <div style="margin-bottom:8px;">
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">📅 Date/Time (Auto from EXIF)</label>
+              <input type="text" id="photo-date" placeholder="e.g. 2026-08-24 10:30 AM" class="photo-meta-input">
+            </div>
             <div style="margin-bottom:8px;">
               <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">⚠️ Observed Risk Level</label>
               <select id="photo-risk-level" class="photo-meta-select">
@@ -504,8 +518,51 @@
     </div>
   </div>
 
+  <!-- State Administrator Emergency Broadcast Modal -->
+  <div class="modal-backdrop" id="sms-broadcast-modal">
+    <div class="modal-content" style="max-width:650px;">
+      <div class="modal-header">
+        <h2 class="modal-title" style="color:var(--primary-cyan);">
+          <i data-lucide="bell-ring" style="vertical-align:middle;margin-right:6px;"></i>
+          Emergency SMS & Disaster Portal Router
+        </h2>
+        <button class="close-btn" id="btn-close-sms-modal">&times;</button>
+      </div>
+      
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.5;">
+        Broadcast automated early warnings or directly connect with official State Disaster Management Authorities (SDMA) & Municipal Portals to escalate alerts and view real-time state advisories.
+      </div>
+
+      <!-- Current Alert Preview Box -->
+      <div class="panel-card" style="background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.3);margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:700;color:var(--risk-critical);margin-bottom:4px;display:flex;align-items:center;gap:6px;">
+          <i data-lucide="alert-triangle" style="width:14px;height:14px;"></i> LIVE BROADCAST MESSAGE
+        </div>
+        <div id="modal-sms-preview-text" style="font-size:12px;color:#fff;line-height:1.5;font-weight:500;">
+          URGENT: CRITICAL landslide risk detected. Evacuate low-lying areas immediately.
+        </div>
+      </div>
+
+      <!-- State Administrator Links Grid -->
+      <div style="font-size:12px;font-weight:700;color:#fff;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+        <i data-lucide="building-2" style="width:14px;height:14px;color:var(--primary-cyan);"></i> SELECT STATE DISASTER AUTHORITY PORTAL TO CONNECT:
+      </div>
+
+      <div class="state-portal-grid" id="state-portal-grid" style="display:grid;grid-template-columns:repeat(2, 1fr);gap:10px;max-height:260px;overflow-y:auto;padding-right:4px;">
+        <!-- Dynamically rendered state portal buttons -->
+      </div>
+
+      <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end;">
+        <button id="btn-trigger-broadcast-toast" class="route-find-btn" style="background:linear-gradient(135deg, #ef4444, #dc2626);">
+          <i data-lucide="send"></i> Dispatch SMS to All Registered Cell Towers
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.js"></script>
   <script src="risk_engine.js"></script>
   <script src="app.js"></script>
 
