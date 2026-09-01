@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DHARA — Login | ISRO Bhuvan Landslide Warning System</title>
+  <meta name="description" content="Secure access to DHARA AI/ML Landslide Early Warning Platform — ISRO Bhuvan Geo-Portal">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-dark:       #060d1b;
+      --bg-card:       rgba(11, 20, 40, 0.85);
+      --primary-cyan:  #00e5ff;
+      --primary-blue:  #2563eb;
+      --accent-gold:   #f59e0b;
+      --risk-low:      #10b981;
+      --risk-critical: #ef4444;
+      --text-main:     #f3f4f6;
+      --text-muted:    #9ca3af;
+      --border-color:  rgba(255,255,255,0.10);
+      --border-glow:   rgba(0,229,255,0.30);
+      --font:          'Outfit', 'Inter', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ── Animated Background ──────────────────────────────────────────────── */
+    .bg-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 30%, rgba(0,229,255,0.06) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 50% at 80% 70%, rgba(37,99,235,0.08) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 40% at 50% 50%, rgba(239,68,68,0.03) 0%, transparent 70%),
+        linear-gradient(135deg, #060d1b 0%, #0a1628 50%, #060d1b 100%);
+    }
+
+    /* Grid lines */
+    .bg-canvas::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+      background-size: 50px 50px;
+      animation: gridShift 20s linear infinite;
+    }
+
+    @keyframes gridShift {
+      0%   { transform: translate(0, 0); }
+      100% { transform: translate(50px, 50px); }
+    }
+
+    /* Floating orbs */
+    .orb {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.12;
+      animation: orbFloat 12s ease-in-out infinite;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .orb-1 { width: 500px; height: 500px; background: #00e5ff; top: -100px; left: -100px; animation-delay: 0s; }
+    .orb-2 { width: 400px; height: 400px; background: #2563eb; bottom: -80px; right: -80px; animation-delay: 4s; }
+    .orb-3 { width: 300px; height: 300px; background: #10b981; top: 50%; left: 50%; animation-delay: 8s; }
+
+    @keyframes orbFloat {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      33%       { transform: translate(30px, -20px) scale(1.05); }
+      66%       { transform: translate(-20px, 30px) scale(0.95); }
+    }
+
+    /* ── Main Card ────────────────────────────────────────────────────────── */
+    .auth-wrapper {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      max-width: 480px;
+      padding: 20px;
+    }
+
+    /* DHARA Branding Header */
+    .brand-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .isro-badge-login {
+      display: inline-block;
+      background: linear-gradient(135deg, #1e3a8a, #0284c7);
+      color: #fff;
+      font-weight: 700;
+      font-size: 10px;
+      letter-spacing: 2px;
+      padding: 5px 14px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.2);
+      margin-bottom: 14px;
+    }
+
+    .brand-logo {
+      font-size: 42px;
+      font-weight: 800;
+      letter-spacing: 3px;
+      background: linear-gradient(90deg, #ffffff 30%, var(--primary-cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+
+    .brand-tagline {
+      font-size: 12px;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+    }
+
+    /* Auth Card */
+    .auth-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-glow);
+      border-radius: 20px;
+      padding: 36px 40px;
+      backdrop-filter: blur(24px);
+      box-shadow:
+        0 0 0 1px rgba(0,229,255,0.08),
+        0 32px 64px rgba(0,0,0,0.5),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+
+    /* ── Tab Toggle ───────────────────────────────────────────────────────── */
+    .tab-toggle {
+      display: flex;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 4px;
+      margin-bottom: 32px;
+      position: relative;
+    }
+
+    .tab-slider {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: calc(50% - 4px);
+      height: calc(100% - 8px);
+      background: linear-gradient(135deg, rgba(0,229,255,0.15), rgba(37,99,235,0.2));
+      border: 1px solid var(--border-glow);
+      border-radius: 7px;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      pointer-events: none;
+    }
+
+    .tab-slider.on-signup {
+      transform: translateX(100%);
+    }
+
+    .tab-btn {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 600;
+      padding: 10px;
+      cursor: pointer;
+      border-radius: 7px;
+      transition: color 0.3s ease;
+      position: relative;
+      z-index: 1;
+      letter-spacing: 0.5px;
+    }
+
+    .tab-btn.active {
+      color: var(--primary-cyan);
+    }
+
+    /* ── Forms ────────────────────────────────────────────────────────────── */
+    .auth-form {
+      display: none;
+      flex-direction: column;
+      gap: 18px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .auth-form.active {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .field-input-wrap {
+      position: relative;
+    }
+
+    .field-input {
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 12px 16px;
+      padding-right: 42px;
+      color: var(--text-main);
+      font-family: var(--font);
+      font-size: 14px;
+      outline: none;
+      transition: all 0.25s ease;
+    }
+
+    .field-input:focus {
+      border-color: var(--primary-cyan);
+      background: rgba(0,229,255,0.04);
+      box-shadow: 0 0 0 3px rgba(0,229,255,0.10);
+    }
+
+    .field-input.error {
+      border-color: var(--risk-critical);
+      box-shadow: 0 0 0 3px rgba(239,68,68,0.10);
+    }
+
+    .field-input.success {
+      border-color: var(--risk-low);
+      box-shadow: 0 0 0 3px rgba(16,185,129,0.10);
+    }
+
+    .field-input::placeholder { color: rgba(156,163,175,0.5); }
+
+    .field-icon {
+      position: absolute;
+      right: 13px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    /* Toggle password visibility */
+    .field-icon.toggle-pass {
+      cursor: pointer;
+      pointer-events: all;
+      transition: color 0.2s;
+    }
+    .field-icon.toggle-pass:hover { color: var(--primary-cyan); }
+
+    /* Username availability indicator */
+    .username-status {
+      font-size: 11px;
+      margin-top: 4px;
+      min-height: 16px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-weight: 600;
+    }
+    .username-status.checking { color: var(--text-muted); }
+    .username-status.available { color: var(--risk-low); }
+    .username-status.taken { color: var(--risk-critical); }
+
+    /* ── Submit Button ────────────────────────────────────────────────────── */
+    .submit-btn {
+      background: linear-gradient(135deg, #00b4d8, #2563eb);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-family: var(--font);
+      font-size: 15px;
+      font-weight: 700;
+      padding: 14px;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+      margin-top: 4px;
+    }
+
+    .submit-btn::before {
+      content: '';
+      position: absolute;
+      top: 0; left: -100%;
+      width: 100%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+      transition: left 0.5s ease;
+    }
+
+    .submit-btn:hover::before { left: 100%; }
+    .submit-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 25px rgba(0,180,216,0.35); }
+    .submit-btn:active { transform: translateY(0); }
+    .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    /* Spinner inside button */
+    .btn-spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Error / Success Toast ────────────────────────────────────────────── */
+    .auth-toast {
+      padding: 11px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .auth-toast.error {
+      display: flex;
+      background: rgba(239,68,68,0.12);
+      border: 1px solid rgba(239,68,68,0.3);
+      color: #fca5a5;
+    }
+
+    .auth-toast.success {
+      display: flex;
+      background: rgba(16,185,129,0.12);
+      border: 1px solid rgba(16,185,129,0.3);
+      color: #6ee7b7;
+    }
+
+    /* ── Divider ──────────────────────────────────────────────────────────── */
+    .form-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .form-divider::before, .form-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border-color);
+    }
+
+    /* ── Footer ───────────────────────────────────────────────────────────── */
+    .auth-footer {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .auth-footer a {
+      color: var(--primary-cyan);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    /* ── Password Strength ────────────────────────────────────────────────── */
+    .pass-strength {
+      display: flex;
+      gap: 4px;
+      margin-top: 6px;
+    }
+
+    .pass-seg {
+      flex: 1;
+      height: 3px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.1);
+      transition: background 0.3s ease;
+    }
+
+    /* ── Password Requirements Checklist ─────────────────────────────────── */
+    .pass-requirements {
+      margin-top: 10px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 10px 14px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 12px;
+    }
+
+    .pass-req-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+      transition: color 0.25s ease;
+      font-weight: 500;
+    }
+
+    .pass-req-item.met {
+      color: #10b981;
+    }
+
+    .pass-req-icon {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 8px;
+      transition: all 0.25s ease;
+    }
+
+    .pass-req-item.met .pass-req-icon {
+      background: #10b981;
+      border-color: #10b981;
+      color: #fff;
+      box-shadow: 0 0 8px rgba(16,185,129,0.4);
+    }
+
+    /* Responsive */
+    @media (max-width: 520px) {
+      .auth-card { padding: 28px 24px; }
+      .form-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Animated Background -->
+  <div class="bg-canvas"></div>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <!-- Auth Wrapper -->
+  <div class="auth-wrapper">
+
+    <!-- Brand Header -->
+    <div class="brand-header">
+      <div class="isro-badge-login">ISRO BHUVAN GEO-PORTAL</div>
+      <div class="brand-logo">DHARA</div>
+      <div class="brand-tagline">AI/ML Landslide Risk &amp; Early Warning Platform</div>
+    </div>
+
+    <!-- Auth Card -->
+    <div class="auth-card">
+
+      <!-- Tab Toggle -->
+      <div class="tab-toggle" id="tab-toggle">
+        <div class="tab-slider" id="tab-slider"></div>
+        <button class="tab-btn active" id="tab-login-btn" onclick="switchTab('login')">Login</button>
+        <button class="tab-btn" id="tab-signup-btn" onclick="switchTab('signup')">Sign Up</button>
+      </div>
+
+      <!-- ── LOGIN FORM ────────────────────────────────────────────────── -->
+      <form class="auth-form active" id="form-login" autocomplete="on" onsubmit="handleLogin(event)">
+
+        <div id="login-toast" class="auth-toast"></div>
+
+        <div class="field-group">
+          <label class="field-label" for="login-username">Username</label>
+          <div class="field-input-wrap">
+            <input type="text" id="login-username" class="field-input" placeholder="Enter your username"
+                   autocomplete="username" required>
+            <span class="field-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+            </span>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="login-password">Password</label>
+          <div class="field-input-wrap">
+            <input type="password" id="login-password" class="field-input" placeholder="Enter your password"
+                   autocomplete="current-password" required>
+            <span class="field-icon toggle-pass" onclick="togglePass('login-password', this)" title="Show/hide password">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </span>
+          </div>
+        </div>
+
+        <button type="submit" class="submit-btn" id="login-submit-btn">
+          Login to DHARA
+        </button>
+
+      </form>
+
+      <!-- ── SIGNUP FORM ───────────────────────────────────────────────── -->
+      <form class="auth-form" id="form-signup" autocomplete="on" onsubmit="handleSignup(event)">
+
+        <div id="signup-toast" class="auth-toast"></div>
+
+        <div class="form-row">
+          <div class="field-group">
+            <label class="field-label" for="signup-firstname">First Name</label>
+            <div class="field-input-wrap">
+              <input type="text" id="signup-firstname" class="field-input" placeholder="First name"
+                     autocomplete="given-name" required>
+              <span class="field-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+              </span>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="signup-lastname">Last Name</label>
+            <div class="field-input-wrap">
+              <input type="text" id="signup-lastname" class="field-input" placeholder="Last name"
+                     autocomplete="family-name" required>
+              <span class="field-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="signup-username">Username <span style="color:var(--primary-cyan);">(must be unique)</span></label>
+          <div class="field-input-wrap">
+            <input type="text" id="signup-username" class="field-input"
+                   placeholder="Choose a unique username"
+                   autocomplete="username"
+                   pattern="[a-zA-Z0-9_]{3,30}"
+                   title="3-30 characters: letters, numbers, underscores only"
+                   required>
+            <span class="field-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </span>
+          </div>
+          <div class="username-status" id="username-status"></div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="signup-password">Password</label>
+          <div class="field-input-wrap">
+            <input type="password" id="signup-password" class="field-input"
+                   placeholder="Min 8 chars with uppercase, number &amp; symbol"
+                   autocomplete="new-password"
+                   minlength="8"
+                   required
+                   oninput="updatePassStrength(this.value)">
+            <span class="field-icon toggle-pass" onclick="togglePass('signup-password', this)" title="Show/hide password">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </span>
+          </div>
+          <!-- Password strength bars -->
+          <div class="pass-strength" id="pass-strength">
+            <div class="pass-seg" id="ps1"></div>
+            <div class="pass-seg" id="ps2"></div>
+            <div class="pass-seg" id="ps3"></div>
+            <div class="pass-seg" id="ps4"></div>
+            <div class="pass-seg" id="ps5"></div>
+          </div>
+          <!-- Password Requirements Checklist -->
+          <div class="pass-requirements" id="pass-requirements">
+            <div class="pass-req-item" id="req-length">
+              <span class="pass-req-icon">✓</span>
+              <span>Min. 8 characters</span>
+            </div>
+            <div class="pass-req-item" id="req-upper">
+              <span class="pass-req-icon">✓</span>
+              <span>1 uppercase letter (A–Z)</span>
+            </div>
+            <div class="pass-req-item" id="req-lower">
+              <span class="pass-req-icon">✓</span>
+              <span>1 lowercase letter (a–z)</span>
+            </div>
+            <div class="pass-req-item" id="req-number">
+              <span class="pass-req-icon">✓</span>
+              <span>1 number (0–9)</span>
+            </div>
+            <div class="pass-req-item" id="req-special" style="grid-column: 1 / -1;">
+              <span class="pass-req-icon">✓</span>
+              <span>1 special character (!@#$%^&amp;*…)</span>
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" class="submit-btn" id="signup-submit-btn">
+          Create Account
+        </button>
+
+      </form>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="auth-footer">
+      DHARA &copy; 2026 &nbsp;|&nbsp; ISRO Bhuvan Geo-Portal &nbsp;|&nbsp;
+      <a href="https://bhuvan.nrsc.gov.in" target="_blank">bhuvan.nrsc.gov.in</a>
+    </div>
+
+  </div>
+
+  <script>
+    /* ── Auth Client (inline for self-contained login.html) ───────────────── */
+
+    const TOKEN_KEY = "dhara_auth_token";
+    const USER_KEY  = "dhara_auth_user";
+
+    // If already logged in, skip login page
+    if (localStorage.getItem(TOKEN_KEY) && localStorage.getItem(USER_KEY)) {
+      window.location.href = "/";
+    }
+
+    /* ── Tab Switching ─────────────────────────────────────────────────────── */
+    let _activeTab = "login";
+
+    function switchTab(tab) {
+      _activeTab = tab;
+      document.getElementById("form-login").classList.toggle("active",  tab === "login");
+      document.getElementById("form-signup").classList.toggle("active", tab === "signup");
+      document.getElementById("tab-login-btn").classList.toggle("active",  tab === "login");
+      document.getElementById("tab-signup-btn").classList.toggle("active", tab === "signup");
+      document.getElementById("tab-slider").classList.toggle("on-signup", tab === "signup");
+      // Clear toasts
+      showToast("login-toast",  "", "");
+      showToast("signup-toast", "", "");
+    }
+
+    /* ── Toast Helper ──────────────────────────────────────────────────────── */
+    function showToast(id, msg, type) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.className = "auth-toast" + (type ? " " + type : "");
+      el.style.display = msg ? "flex" : "none";
+      el.innerHTML = msg ? `<span>${type === "error" ? "⚠" : "✓"}</span>${msg}` : "";
+    }
+
+    /* ── Password Toggle ───────────────────────────────────────────────────── */
+    function togglePass(inputId, icon) {
+      const inp = document.getElementById(inputId);
+      const showing = inp.type === "text";
+      inp.type = showing ? "password" : "text";
+      icon.style.color = showing ? "" : "var(--primary-cyan)";
+    }
+
+    /* ── Password Strength ─────────────────────────────────────────────────── */
+    function updatePassStrength(val) {
+      const hasLength  = val.length >= 8;
+      const hasUpper   = /[A-Z]/.test(val);
+      const hasLower   = /[a-z]/.test(val);
+      const hasNumber  = /[0-9]/.test(val);
+      const hasSpecial = /[^a-zA-Z0-9]/.test(val);
+
+      // Toggle requirement items
+      document.getElementById("req-length") .classList.toggle("met", hasLength);
+      document.getElementById("req-upper")  .classList.toggle("met", hasUpper);
+      document.getElementById("req-lower")  .classList.toggle("met", hasLower);
+      document.getElementById("req-number") .classList.toggle("met", hasNumber);
+      document.getElementById("req-special").classList.toggle("met", hasSpecial);
+
+      // Score 0–5
+      const score = [hasLength, hasUpper, hasLower, hasNumber, hasSpecial].filter(Boolean).length;
+      const colors = ["#ef4444", "#ef4444", "#f59e0b", "#f59e0b", "#10b981", "#00e5ff"];
+      for (let i = 1; i <= 5; i++) {
+        const seg = document.getElementById("ps" + i);
+        if (seg) seg.style.background = i <= score ? colors[score] : "rgba(255,255,255,0.1)";
+      }
+    }
+
+    /* ── Username Availability Check ───────────────────────────────────────── */
+    let _checkTimer = null;
+
+    document.getElementById("signup-username").addEventListener("input", function () {
+      const statusEl = document.getElementById("username-status");
+      const val = this.value.trim();
+
+      if (!val || val.length < 3) {
+        statusEl.className = "username-status";
+        statusEl.textContent = "";
+        return;
+      }
+
+      statusEl.className = "username-status checking";
+      statusEl.textContent = "Checking availability\u2026";
+
+      clearTimeout(_checkTimer);
+      _checkTimer = setTimeout(async () => {
+        try {
+          const res = await fetch("/api/auth/check-username?username=" + encodeURIComponent(val));
+          const data = await res.json();
+          if (data.available) {
+            statusEl.className = "username-status available";
+            statusEl.textContent = "\u2713 @" + val + " is available!";
+            document.getElementById("signup-username").classList.remove("error");
+            document.getElementById("signup-username").classList.add("success");
+          } else {
+            statusEl.className = "username-status taken";
+            statusEl.textContent = "\u2717 @" + val + " is already taken.";
+            document.getElementById("signup-username").classList.add("error");
+            document.getElementById("signup-username").classList.remove("success");
+          }
+        } catch (_) {
+          statusEl.className = "username-status";
+          statusEl.textContent = "";
+        }
+      }, 500);
+    });
+
+    /* ── Login ─────────────────────────────────────────────────────────────── */
+    async function handleLogin(e) {
+      e.preventDefault();
+      const btn = document.getElementById("login-submit-btn");
+      const username = document.getElementById("login-username").value.trim();
+      const password = document.getElementById("login-password").value;
+
+      showToast("login-toast", "", "");
+      btn.disabled = true;
+      btn.innerHTML = '<span class="btn-spinner"></span> Logging in\u2026';
+
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          showToast("login-toast", data.error || "Login failed. Please try again.", "error");
+        } else {
+          // Save session & redirect
+          localStorage.setItem(TOKEN_KEY, data.token);
+          localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+          showToast("login-toast", "Login successful! Redirecting\u2026", "success");
+          setTimeout(() => { window.location.href = "/"; }, 800);
+          return;
+        }
+      } catch (_) {
+        showToast("login-toast", "Network error. Please check if the server is running.", "error");
+      }
+
+      btn.disabled = false;
+      btn.textContent = "Login to DHARA";
+    }
+
+    /* ── Sign Up ───────────────────────────────────────────────────────────── */
+    async function handleSignup(e) {
+      e.preventDefault();
+      const btn = document.getElementById("signup-submit-btn");
+      const first_name = document.getElementById("signup-firstname").value.trim();
+      const last_name  = document.getElementById("signup-lastname").value.trim();
+      const username   = document.getElementById("signup-username").value.trim();
+      const password   = document.getElementById("signup-password").value;
+
+      if (!first_name || !last_name || !username || !password) {
+        showToast("signup-toast", "All fields are required.", "error");
+        return;
+      }
+
+      // Password requirements validation
+      const hasLength  = password.length >= 8;
+      const hasUpper   = /[A-Z]/.test(password);
+      const hasLower   = /[a-z]/.test(password);
+      const hasNumber  = /[0-9]/.test(password);
+      const hasSpecial = /[^a-zA-Z0-9]/.test(password);
+      if (!hasLength || !hasUpper || !hasLower || !hasNumber || !hasSpecial) {
+        showToast("signup-toast", "Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.", "error");
+        return;
+      }
+
+      showToast("signup-toast", "", "");
+      btn.disabled = true;
+      btn.innerHTML = '<span class="btn-spinner"></span> Creating account\u2026';
+
+      try {
+        const res = await fetch("/api/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ first_name, last_name, username, password }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          showToast("signup-toast", data.error || "Sign up failed. Please try again.", "error");
+        } else {
+          localStorage.setItem(TOKEN_KEY, data.token);
+          localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+          showToast("signup-toast", "Account created! Welcome to DHARA!", "success");
+          setTimeout(() => { window.location.href = "/"; }, 900);
+          return;
+        }
+      } catch (_) {
+        showToast("signup-toast", "Network error. Please check if the server is running.", "error");
+      }
+
+      btn.disabled = false;
+      btn.textContent = "Create Account";
+    }
+  </script>
+</body>
+</html>
