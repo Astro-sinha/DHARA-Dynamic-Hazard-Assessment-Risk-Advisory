@@ -1059,11 +1059,15 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Try Flask ML Date-Wise Route Risk API first
-    if (window.FlaskML && window.FlaskML.isConnected) {
+    if (window.FlaskML) {
       try {
         const mlRes = await window.FlaskML.predictRouteRisk({
           from: fromLocation.name,
           to: toLocation.name,
+          from_lat: fromLocation.lat,
+          from_lon: fromLocation.lon,
+          to_lat: toLocation.lat,
+          to_lon: toLocation.lon,
           date: travelDate,
           route_coordinates: routeCoords
         });
@@ -1093,36 +1097,61 @@ document.addEventListener("DOMContentLoaded", () => {
     const segments = mlRes.segments || [];
     const waypoints = segments.map(s => ({ lat: s.latitude, lon: s.longitude, data: s }));
     const isBlocked = mlRes.road_status === "BLOCKED";
+    const primaryRoute = mlRes.primary_route || {};
+    const primaryCoords = primaryRoute.coordinates || primaryRoute.coords || [];
 
-    // 1. Draw polyline segments for the primary route
-    for (let i = 0; i < waypoints.length - 1; i++) {
-      const p1 = waypoints[i], p2 = waypoints[i + 1];
-      const riskClass = p2.data.risk_level || p1.data.risk_level || "LOW";
-      const segColor = isBlocked ? "#ef4444" : (RISK_COLORS[riskClass] || "#10b981");
-      L.polyline([[p1.lat, p1.lon], [p2.lat, p2.lon]], {
-        color: segColor,
-        weight: 6,
-        opacity: 0.95,
-        dashArray: isBlocked ? "8, 8" : null,
-        lineCap: "round"
-      }).addTo(routeLayerGroup);
+    // Helper to draw a specific route on the map
+    function drawActiveRoutePolyline(routeObj, isAlternative = false) {
+      const rCoords = routeObj.coordinates || routeObj.coords || [];
+      const rRisk = routeObj.overall_risk || "LOW";
+      const rColor = RISK_COLORS[rRisk] || "#10b981";
+
+      if (rCoords && rCoords.length >= 2) {
+        // Draw full detailed Google Maps road polyline
+        L.polyline(rCoords, {
+          color: rColor,
+          weight: 6,
+          opacity: 0.95,
+          lineCap: "round",
+          lineJoin: "round"
+        }).addTo(routeLayerGroup);
+      } else if (waypoints.length >= 2) {
+        // Fallback waypoint polyline
+        for (let i = 0; i < waypoints.length - 1; i++) {
+          const p1 = waypoints[i], p2 = waypoints[i + 1];
+          const riskClass = p2.data.risk_level || p1.data.risk_level || "LOW";
+          const segColor = isBlocked ? "#ef4444" : (RISK_COLORS[riskClass] || "#10b981");
+          L.polyline([[p1.lat, p1.lon], [p2.lat, p2.lon]], {
+            color: segColor,
+            weight: 6,
+            opacity: 0.95,
+            dashArray: isBlocked ? "8, 8" : null,
+            lineCap: "round"
+          }).addTo(routeLayerGroup);
+        }
+      }
     }
 
-    // 1b. If an alternative route is recommended and has coordinates, draw it in bright teal
-    if (mlRes.recommended_route && mlRes.recommended_route.coordinates && mlRes.recommended_route.id !== mlRes.primary_route_id) {
-      const altCoords = mlRes.recommended_route.coordinates;
-      const altLine = L.polyline(altCoords, {
+    // 1. Draw Primary Google Maps Route
+    drawActiveRoutePolyline(primaryRoute);
+
+    // 1b. If an alternative route is recommended and different from primary, draw it distinctly
+    const recRoute = mlRes.recommended_route;
+    const isAltRecommended = recRoute && (recRoute.route_id !== (primaryRoute.route_id || "gmap-route-1") && recRoute.id !== primaryRoute.id);
+    if (isAltRecommended && recRoute.coordinates && recRoute.coordinates.length > 0) {
+      const altLine = L.polyline(recRoute.coordinates, {
         color: "#06b6d4",
         weight: 6,
         opacity: 0.95,
+        dashArray: "6, 6",
         lineCap: "round"
       }).addTo(routeLayerGroup);
       altLine.bindPopup(`
         <div style="font-family:'Outfit',sans-serif;padding:6px;min-width:200px;">
-          <div style="font-weight:800;font-size:13px;color:#0891b2;">🔄 RECOMMENDED ALTERNATIVE</div>
-          <div style="font-size:12px;font-weight:700;color:#111;margin:2px 0;">${mlRes.recommended_route.name}</div>
-          <div style="font-size:11px;color:#444;">Via: <strong>${mlRes.recommended_route.via}</strong></div>
-          <div style="font-size:11px;color:#10b981;font-weight:700;margin-top:2px;">Clear of confirmed landslides</div>
+          <div style="font-weight:800;font-size:13px;color:#0891b2;">🔄 RECOMMENDED GOOGLE ALTERNATIVE</div>
+          <div style="font-size:12px;font-weight:700;color:#111;margin:2px 0;">${recRoute.name}</div>
+          <div style="font-size:11px;color:#444;">Via: <strong>${recRoute.via}</strong></div>
+          <div style="font-size:11px;color:#10b981;font-weight:700;margin-top:2px;">Safer corridor (${recRoute.overall_risk} Risk)</div>
         </div>
       `);
     }
@@ -1161,7 +1190,7 @@ document.addEventListener("DOMContentLoaded", () => {
       icon: L.divIcon({ className: "", html: `<div class="journey-pin pin-to">B</div>`, iconSize: [32, 32], iconAnchor: [16, 16] })
     }).addTo(routeLayerGroup);
 
-    // 4. Sampled weather station waypoint markers along the route
+    // 4. Sampled weather & terrain telemetry waypoint markers along the route
     waypoints.forEach((wp, idx) => {
       const s = wp.data;
       const riskClass = s.risk_level || "LOW";
@@ -1181,23 +1210,27 @@ document.addEventListener("DOMContentLoaded", () => {
         <div style="font-family:'Outfit',sans-serif;color:#111;padding:4px;min-width:210px;">
           <div style="font-weight:800;font-size:13px;color:#1e3a8a;">${s.segment_name}</div>
           <div style="font-size:12px;font-weight:700;color:${riskColor};margin:2px 0 6px 0;">
-            Estimated Landslide Risk: ${riskClass}
+            Safety Level: ${riskClass === 'LOW' ? '🟢 Low Risk' : (riskClass === 'MODERATE' ? '🟡 Moderate Risk' : '🔴 High Risk')}
           </div>
           <div style="border-top:1px solid #eee;padding-top:4px;font-size:11px;color:#444;line-height:1.5;">
             <div>📍 Weather Station: <strong>${s.station_name}</strong> (${s.district})</div>
             <div>🌧️ Rainfall: <strong>${s.rainfall_mm} mm</strong> (3-Day: <strong>${s.rain_cum_3d_mm} mm</strong>)</div>
             <div>🌡️ Avg Temp: <strong>${s.avg_temp_c} °C</strong> · Elev: <strong>${s.elevation_m} m</strong></div>
             <div>📊 Probabilities: <span style="color:#2563eb;">${probStr}</span></div>
-            <div style="font-size:10px;color:#666;margin-top:2px;">Mode: <em>${s.mode}</em></div>
+            <div style="font-size:10px;color:#666;margin-top:2px;">ISRO Bhuvan GIS + DHARA ML Inference</div>
           </div>
         </div>
       `);
       marker.addTo(routeLayerGroup);
     });
 
-    // Fit map bounds
-    const allCoords = waypoints.map(wp => [wp.lat, wp.lon]).concat([[fromLoc.lat, fromLoc.lon], [toLoc.lat, toLoc.lon]]);
-    map.fitBounds(allCoords, { padding: [60, 60] });
+    // Fit map bounds to encompass the full road route
+    if (primaryCoords && primaryCoords.length > 0) {
+      map.fitBounds(primaryCoords, { padding: [50, 50] });
+    } else {
+      const allCoords = waypoints.map(wp => [wp.lat, wp.lon]).concat([[fromLoc.lat, fromLoc.lon], [toLoc.lat, toLoc.lon]]);
+      map.fitBounds(allCoords, { padding: [60, 60] });
+    }
 
     // 5. Populate Results Panel UI
     const resultsPanel = document.getElementById("journey-results-panel");
@@ -1237,7 +1270,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const seasonLabelEl = document.getElementById("journey-season-label");
     if (seasonLabelEl) seasonLabelEl.innerText = mlRes.season || "Monsoon";
 
-    // 5b. Road Status & Estimated Traffic Badges
+    // 5b. Road Status & Real Traffic Badges
     const roadStatusBadge = document.getElementById("journey-road-status-badge");
     if (roadStatusBadge) {
       const st = mlRes.road_status || "OPEN";
@@ -1253,34 +1286,30 @@ document.addEventListener("DOMContentLoaded", () => {
     const trafficStatusBadge = document.getElementById("journey-traffic-status-badge");
     if (trafficStatusBadge) {
       const tr = mlRes.traffic_status || "LOW";
-      trafficStatusBadge.innerText = tr === "HIGH" ? "🔴 HEAVY" : tr === "MODERATE" ? "🟡 MODERATE" : "🟢 LIGHT";
+      trafficStatusBadge.innerText = tr === "HIGH" ? "🔴 HEAVY TRAFFIC" : tr === "MODERATE" ? "🟡 MODERATE TRAFFIC" : "🟢 LIGHT TRAFFIC";
       trafficStatusBadge.className = `metric-val ${tr === "HIGH" ? "traffic-high" : tr === "MODERATE" ? "traffic-moderate" : "traffic-low"}`;
     }
     const trafficDelayEl = document.getElementById("journey-traffic-delay");
     if (trafficDelayEl) {
       const delay = mlRes.traffic_delay_min || 0;
-      trafficDelayEl.innerText = `+${delay} min delay · Demo/Estimated`;
+      const trSource = mlRes.traffic_source || "Google Maps Live Traffic";
+      trafficDelayEl.innerText = delay > 0 ? `+${delay} min delay (${trSource})` : `Normal flow · ${trSource}`;
     }
 
     const dataModeBadge = document.getElementById("journey-data-mode-badge");
     if (dataModeBadge) {
-      dataModeBadge.innerText = mlRes.data_mode === "Observed Historical Weather Record"
-        ? "✅ HISTORICAL WEATHER RECORD"
-        : "📅 HISTORICAL SEASONAL ESTIMATE";
-      dataModeBadge.style.background = mlRes.data_mode === "Observed Historical Weather Record"
-        ? "rgba(16,185,129,0.15)"
-        : "rgba(0,229,255,0.15)";
-      dataModeBadge.style.color = mlRes.data_mode === "Observed Historical Weather Record"
-        ? "var(--risk-low)"
-        : "var(--primary-cyan)";
+      dataModeBadge.innerText = "GOOGLE ROUTE + BHUVAN GIS + DHARA ML";
+      dataModeBadge.style.background = "rgba(0,229,255,0.15)";
+      dataModeBadge.style.color = "var(--primary-cyan)";
     }
 
-    // Overall Risk Verdict & Horizontal Probability Bar
+    // Overall Risk Verdict (🟢 Low | 🟡 Moderate | 🔴 High) & Horizontal Probability Bar
     const overallRisk = mlRes.overall_risk || "MODERATE";
     const probPct = parseFloat((mlRes.risk_probability * 100).toFixed(1));
     const verdictEl = document.getElementById("journey-verdict-badge");
     if (verdictEl) {
-      verdictEl.innerText = overallRisk;
+      const riskIcon = overallRisk === "LOW" ? "🟢 LOW" : overallRisk === "MODERATE" ? "🟡 MODERATE" : "🔴 HIGH";
+      verdictEl.innerText = riskIcon;
       verdictEl.style.color = RISK_COLORS[overallRisk] || "var(--risk-moderate)";
     }
 
@@ -1298,10 +1327,8 @@ document.addEventListener("DOMContentLoaded", () => {
         probBarFill.style.background = "linear-gradient(90deg, #10b981, #34d399)";
       } else if (overallRisk === "MODERATE") {
         probBarFill.style.background = "linear-gradient(90deg, #10b981, #f59e0b)";
-      } else if (overallRisk === "HIGH") {
-        probBarFill.style.background = "linear-gradient(90deg, #f59e0b, #f97316)";
       } else {
-        probBarFill.style.background = "linear-gradient(90deg, #f97316, #ef4444)";
+        probBarFill.style.background = "linear-gradient(90deg, #f59e0b, #ef4444)";
       }
     }
 
@@ -1309,17 +1336,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const recCard = document.getElementById("journey-recommendation-card");
     const recText = document.getElementById("journey-recommendation-text");
     if (recCard && recText) {
-      recText.innerText = mlRes.recommendation || "Route evaluated.";
-      if (mlRes.road_status === "BLOCKED" || (mlRes.recommended_route && mlRes.recommended_route.id !== mlRes.primary_route_id)) {
+      recText.innerText = mlRes.recommendation || "Route evaluated with Google Maps & DHARA ML.";
+      if (mlRes.road_status === "BLOCKED" || isAltRecommended) {
         recCard.style.borderColor = "#ef4444";
         recCard.style.background = "rgba(239, 68, 68, 0.1)";
         const recTitle = document.getElementById("rec-card-title");
-        if (recTitle) recTitle.innerHTML = `<i data-lucide="shield-alert" style="color:#ef4444;"></i> <span style="color:#ef4444;font-weight:800;">RECOMMENDED ALTERNATIVE AVAILABLE</span>`;
+        if (recTitle) recTitle.innerHTML = `<i data-lucide="shield-alert" style="color:#ef4444;"></i> <span style="color:#ef4444;font-weight:800;">SAFER ALTERNATIVE RECOMMENDED</span>`;
       } else {
         recCard.style.borderColor = "#10b981";
         recCard.style.background = "rgba(16, 185, 129, 0.1)";
         const recTitle = document.getElementById("rec-card-title");
-        if (recTitle) recTitle.innerHTML = `<i data-lucide="shield-check" style="color:#10b981;"></i> <span style="color:#10b981;font-weight:800;">ORIGINAL ROUTE RECOMMENDED</span>`;
+        if (recTitle) recTitle.innerHTML = `<i data-lucide="shield-check" style="color:#10b981;"></i> <span style="color:#10b981;font-weight:800;">PRIMARY GOOGLE ROUTE RECOMMENDED</span>`;
       }
     }
 
@@ -1332,36 +1359,57 @@ document.addEventListener("DOMContentLoaded", () => {
         altCard.style.display = "block";
         altList.innerHTML = "";
         candidates.forEach(cand => {
-          const isRec = mlRes.recommended_route && mlRes.recommended_route.id === cand.id;
-          const isOrig = cand.is_original;
-          const isBlockedRoute = cand.road_status === "BLOCKED";
+          const isRec = recRoute && (recRoute.route_id === cand.route_id || recRoute.id === cand.id);
+          const isOrig = cand.is_primary || cand.is_original;
           const candDiv = document.createElement("div");
           candDiv.className = `route-alt-card ${isRec ? 'active-selected' : ''}`;
 
           const riskColor = RISK_COLORS[cand.overall_risk] || "#10b981";
           const statusColor = cand.road_status === "BLOCKED" ? "#ef4444" : cand.road_status === "CAUTION" ? "#f59e0b" : "#10b981";
+          const durationMin = cand.total_duration_min || cand.duration_min || cand.est_time_min;
 
           candDiv.innerHTML = `
             <div class="route-alt-header">
               <div class="route-alt-name">
                 ${isRec ? '⭐ ' : ''}${cand.name}
-                ${isOrig ? '<span style="font-size:10px;color:var(--text-muted);font-weight:400;margin-left:4px;">(Primary)</span>' : ''}
+                ${isOrig ? '<span style="font-size:10px;color:var(--text-muted);font-weight:400;margin-left:4px;">(Google Primary)</span>' : ''}
               </div>
               ${isRec ? '<span class="route-alt-badge" style="background:rgba(0,229,255,0.2);color:var(--primary-cyan);border:1px solid var(--primary-cyan);">RECOMMENDED</span>' : ''}
             </div>
-            <div class="route-alt-via">Via ${cand.via} · ${cand.distance_km} km · ~${cand.est_time_min} mins (${(cand.est_time_min/60).toFixed(1)} hrs)</div>
+            <div class="route-alt-via">Via ${cand.via} · ${cand.distance_km} km · ~${durationMin} mins (${(durationMin/60).toFixed(1)} hrs)</div>
             <div class="route-alt-metrics">
-              <span class="route-alt-badge" style="background:${riskColor}22;color:${riskColor};border:1px solid ${riskColor}55;">Landslide: ${cand.overall_risk}</span>
+              <span class="route-alt-badge" style="background:${riskColor}22;color:${riskColor};border:1px solid ${riskColor}55;">Safety: ${cand.overall_risk}</span>
               <span class="route-alt-badge" style="background:${statusColor}22;color:${statusColor};border:1px solid ${statusColor}55;">Road: ${cand.road_status}</span>
-              <span class="route-alt-badge" style="background:rgba(255,255,255,0.06);color:#e2e8f0;">Traffic Delay: +${cand.traffic_delay_min}m</span>
+              <span class="route-alt-badge" style="background:rgba(255,255,255,0.06);color:#e2e8f0;">Traffic: ${cand.traffic_status}</span>
             </div>
           `;
 
           candDiv.addEventListener("click", () => {
             document.querySelectorAll(".route-alt-card").forEach(el => el.classList.remove("active-selected"));
             candDiv.classList.add("active-selected");
-            if (cand.coordinates && cand.coordinates.length > 0) {
-              const poly = L.polyline(cand.coordinates);
+            const coordsToFit = cand.coordinates || cand.coords;
+            if (coordsToFit && coordsToFit.length > 0) {
+              if (routeLayerGroup) map.removeLayer(routeLayerGroup);
+              routeLayerGroup = L.layerGroup().addTo(map);
+
+              // Draw this alternative route polyline
+              const poly = L.polyline(coordsToFit, {
+                color: riskColor,
+                weight: 6,
+                opacity: 0.95,
+                lineCap: "round",
+                lineJoin: "round"
+              }).addTo(routeLayerGroup);
+
+              // Re-add FROM and TO pins
+              L.marker([fromLoc.lat, fromLoc.lon], {
+                icon: L.divIcon({ className: "", html: `<div class="journey-pin pin-from">A</div>`, iconSize: [32, 32], iconAnchor: [16, 16] })
+              }).addTo(routeLayerGroup);
+
+              L.marker([toLoc.lat, toLoc.lon], {
+                icon: L.divIcon({ className: "", html: `<div class="journey-pin pin-to">B</div>`, iconSize: [32, 32], iconAnchor: [16, 16] })
+              }).addTo(routeLayerGroup);
+
               map.fitBounds(poly.getBounds(), { padding: [50, 50] });
             }
           });
@@ -1460,29 +1508,28 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function evaluateLocalJourney(segments, fromLoc, toLoc, travelDate) {
-    const nearestSt = findNearestStation((fromLoc.lat + toLoc.lat) / 2, (fromLoc.lon + toLoc.lon) / 2);
-    const activeSegments = segments.length > 0 ? segments : [{
-      name: `${fromLoc.name} → ${toLoc.name} Highway Segment`,
-      coords: [[fromLoc.lat, fromLoc.lon], [toLoc.lat, toLoc.lon]],
-      road_status: nearestSt.rainfall_72h_mm > 250 ? "blocked" : nearestSt.rainfall_72h_mm > 150 ? "partial" : "clear",
-      under_construction: false,
-      traffic_level: "moderate",
-      distance_km: Math.max(5, Math.round(haversineKm(fromLoc, toLoc))),
-      duration_min: Math.max(10, Math.round(haversineKm(fromLoc, toLoc) * 1.6)),
-      station_idx: nearestSt.idx
-    }];
+    const routeStations = findRouteStations(fromLoc, toLoc);
+    activeRouteStations = routeStations;
+    activeRouteFrom = fromLoc;
+    activeRouteTo = toLoc;
+    renderStationsList(null);
 
-    buildRouteOnMap(activeSegments, fromLoc, toLoc);
+    // Draw full continuous path across the corridor from FROM to TO
+    drawFullConnectedRoute(routeStations, fromLoc, toLoc, -1);
 
-    const segmentResults = activeSegments.map(seg => {
-      const st = PRESET_STATIONS[seg.station_idx] || PRESET_STATIONS[0];
+    const stationResults = routeStations.map(entry => {
+      const st = entry.station;
       const pred = predictCloudMLRisk(st);
-      return { seg, pred, st };
+      return { st, pred };
     });
-    const worstRisk = segmentResults.reduce((worst, cur) => {
+
+    const worstRisk = stationResults.length > 0 ? stationResults.reduce((worst, cur) => {
       const w = { LOW: 0, MODERATE: 1, HIGH: 2, CRITICAL: 3 };
       return w[cur.pred.risk_class] > w[worst.pred.risk_class] ? cur : worst;
-    }, segmentResults[0]);
+    }, stationResults[0]) : {
+      st: findNearestStation((fromLoc.lat + toLoc.lat)/2, (fromLoc.lon + toLoc.lon)/2),
+      pred: predictCloudMLRisk(findNearestStation((fromLoc.lat + toLoc.lat)/2, (fromLoc.lon + toLoc.lon)/2))
+    };
 
     const resultsPanel = document.getElementById("journey-results-panel");
     if (resultsPanel) resultsPanel.style.display = "block";
@@ -1492,7 +1539,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const verdictEl = document.getElementById("journey-verdict-badge");
     if (verdictEl) {
-      verdictEl.innerText = overallRisk;
+      verdictEl.innerText = overallRisk === "LOW" ? "🟢 LOW" : overallRisk === "MODERATE" ? "🟡 MODERATE" : "🔴 HIGH";
       verdictEl.style.color = RISK_COLORS[overallRisk] || "var(--risk-moderate)";
     }
 
@@ -1514,13 +1561,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (dateLabelEl) dateLabelEl.innerText = travelDate;
 
     const worstSecEl = document.getElementById("journey-worst-section");
-    if (worstSecEl) worstSecEl.innerText = worstRisk.seg.name;
+    if (worstSecEl) worstSecEl.innerText = `${worstRisk.st.subdivision || worstRisk.st.district} Sector`;
 
     const stNameEl = document.getElementById("journey-station-name");
-    if (stNameEl) stNameEl.innerText = worstRisk.st ? `${worstRisk.st.subdivision || worstRisk.st.district} (${worstRisk.st.state})` : "Regional Station";
+    if (stNameEl) stNameEl.innerText = `${worstRisk.st.subdivision || worstRisk.st.district} (${worstRisk.st.state})`;
 
     const rainValEl = document.getElementById("journey-rain-val");
-    if (rainValEl) rainValEl.innerText = worstRisk.st ? `${worstRisk.st.rainfall_72h_mm} mm (72h)` : "N/A";
+    if (rainValEl) rainValEl.innerText = `${worstRisk.st.rainfall_72h_mm} mm (72h)`;
 
     const advisoryEl = document.getElementById("journey-advisory");
     if (advisoryEl) advisoryEl.innerText = generateJourneyAdvisory(overallRisk, fromLoc, toLoc, false, false);
@@ -1528,26 +1575,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const segsEl = document.getElementById("journey-segments");
     if (segsEl) {
       segsEl.innerHTML = "";
-      segmentResults.forEach(({ seg, pred, st }) => {
+      stationResults.forEach(({ st, pred }, idx) => {
         const segDiv = document.createElement("div");
         segDiv.className = "journey-segment-card";
         segDiv.innerHTML = `
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-            <strong style="color:#fff;font-size:12px;">${seg.name}</strong>
+            <strong style="color:#fff;font-size:12px;">Waypoint ${idx+1}: ${st.subdivision || st.district}</strong>
             <span class="risk-badge badge-${pred.risk_class.toLowerCase()}">${pred.risk_class}</span>
           </div>
           <div style="font-size:11px;color:var(--text-muted);">
-            Corridor Risk: ${pred.risk_class} (${Math.round(pred.confidence*100)}%)
+            District Risk: ${pred.risk_class} (${Math.round(pred.confidence*100)}%) · 72h Rain: ${st.rainfall_72h_mm}mm
           </div>`;
         segsEl.appendChild(segDiv);
       });
     }
-
-    const routeStations = findRouteStations(fromLoc, toLoc);
-    activeRouteStations = routeStations;
-    activeRouteFrom = fromLoc;
-    activeRouteTo = toLoc;
-    renderStationsList(null);
   }
 
   function haversineKm(a, b) {

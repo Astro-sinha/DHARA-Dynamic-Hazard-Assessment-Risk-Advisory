@@ -1952,3 +1952,258 @@ body {
   background: rgba(255, 255, 255, 0.15);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE LAYOUT ENGINE (LAPTOP, TABLET & MOBILE)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Laptops & Medium Desktops (<= 1280px) */
+@media screen and (max-width: 1280px) {
+  :root {
+    --sidebar-width: 380px;
+  }
+  .brand-sub {
+    max-width: 220px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .app-header {
+    padding: 0 14px;
+    gap: 10px;
+  }
+  .header-status {
+    gap: 8px;
+  }
+  .header-btn span[data-i18n] {
+    font-size: 12px;
+  }
+}
+
+/* Tablets & Small Laptops (<= 1024px) */
+@media screen and (max-width: 1024px) {
+  :root {
+    --sidebar-width: 350px;
+  }
+  .brand-sub {
+    display: none;
+  }
+  .app-header {
+    height: 56px;
+  }
+  .map-control-card {
+    width: 240px;
+    padding: 10px;
+  }
+  .layer-select-btn {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+}
+
+/* Mobile & Small Tablets (<= 768px) */
+@media screen and (max-width: 768px) {
+  body {
+    height: 100vh;
+    height: 100dvh;
+    overflow-y: auto;
+  }
+
+  .app-header {
+    height: auto;
+    min-height: 54px;
+    padding: 8px 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: space-between;
+  }
+
+  .brand-container {
+    gap: 8px;
+  }
+
+  .brand-title {
+    font-size: 16px;
+  }
+
+  .isro-badge {
+    font-size: 9px;
+    padding: 3px 6px;
+  }
+
+  .header-status {
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+  }
+
+  .live-indicator {
+    font-size: 10px;
+    padding: 3px 8px;
+  }
+
+  .header-btn {
+    padding: 5px 9px;
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  .user-profile-chip {
+    margin-left: 2px;
+    padding: 3px 8px 3px 4px;
+  }
+  .user-profile-chip::before {
+    display: none;
+  }
+  .user-chip-name {
+    font-size: 11px;
+  }
+  .user-chip-username {
+    font-size: 9px;
+  }
+
+  /* Stack Main Container: Map on Top, Control Panel below */
+  .main-container {
+    flex-direction: column;
+    height: auto;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  #map-container {
+    height: 46vh;
+    min-height: 280px;
+    flex: none;
+  }
+
+  .sidebar-panel {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--border-color);
+    box-shadow: none;
+    overflow-y: visible;
+    flex: 1;
+  }
+
+  .tab-navigation {
+    position: sticky;
+    top: 0;
+    z-index: 600;
+    background: rgba(17, 24, 39, 0.98);
+  }
+
+  .tab-btn {
+    padding: 10px 6px;
+    font-size: 12px;
+  }
+
+  .tab-content {
+    padding: 12px;
+  }
+
+  /* Compact Map Controls for Touch */
+  .map-floating-controls {
+    top: 8px;
+    left: 8px;
+    gap: 6px;
+    max-width: calc(100% - 16px);
+  }
+
+  .map-control-card {
+    width: auto;
+    max-width: 220px;
+    padding: 8px;
+    border-radius: 6px;
+  }
+
+  .map-control-title {
+    font-size: 10px;
+    margin-bottom: 4px;
+  }
+
+  .layer-select-btn {
+    font-size: 11px;
+    padding: 5px 8px;
+    margin-bottom: 2px;
+  }
+
+  .legend-grid {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
+  .legend-item {
+    font-size: 10px;
+  }
+
+  /* Responsive HUD Telemetry Bar */
+  .bhuvan-hud-bar {
+    bottom: 6px;
+    left: 6px;
+    right: 6px;
+    width: auto;
+    padding: 4px 8px;
+    font-size: 10px;
+    gap: 6px;
+    justify-content: space-around;
+    flex-wrap: wrap;
+  }
+  .hud-divider {
+    display: none;
+  }
+
+  /* Floating SOS Button on Mobile */
+  .floating-map-sos-btn {
+    bottom: 44px;
+    right: 8px;
+    padding: 6px 12px;
+    font-size: 11px;
+    gap: 5px;
+  }
+
+  /* Modals & Dialogs on Mobile */
+  .modal-dialog,
+  .route-modal-dialog,
+  .sms-modal-dialog {
+    width: 94vw !important;
+    max-width: 94vw !important;
+    max-height: 86vh !important;
+    padding: 14px !important;
+    margin: 10px auto !important;
+  }
+
+  .journey-planner-card {
+    padding: 12px;
+  }
+
+  .route-alt-header {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+}
+
+/* Extra Small Phones (<= 480px) */
+@media screen and (max-width: 480px) {
+  .isro-badge {
+    display: none;
+  }
+  .live-indicator span[data-i18n] {
+    display: none;
+  }
+  .live-indicator {
+    padding: 4px 6px;
+  }
+  .header-btn span {
+    display: none;
+  }
+  .header-btn {
+    padding: 6px 8px;
+  }
+  .tab-btn span {
+    font-size: 11px;
+  }
+  .status-metric-card .metric-val {
+    font-size: 14px;
+  }
+}
+
+

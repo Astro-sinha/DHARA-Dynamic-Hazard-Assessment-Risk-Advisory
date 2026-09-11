@@ -18,8 +18,9 @@
   "use strict";
 
   /* ── Configuration ──────────────────────────────────────────────────────── */
-  const BASE_URL   = "";          // empty = same origin as served by Flask
-  const TIMEOUT_MS = 5000;        // give up after 5 s
+  let _activeBaseUrl = "";        // auto-detected backend URL
+  const CANDIDATE_URLS = ["", "http://127.0.0.1:5000", "http://localhost:5000", "http://localhost:8080"];
+  const TIMEOUT_MS = 6000;        // give up after 6 s
 
   /* ── State ──────────────────────────────────────────────────────────────── */
   let _connected = false;
@@ -38,10 +39,12 @@
   }
 
   async function _fetchWithTimeout(url, options = {}, ms = TIMEOUT_MS) {
+    const baseUrl = _activeBaseUrl || "";
+    const fullUrl = url.startsWith("http") ? url : (baseUrl + url);
     const controller = new AbortController();
     const timer      = setTimeout(() => controller.abort(), ms);
     try {
-      const res = await fetch(BASE_URL + url, { ...options, signal: controller.signal });
+      const res = await fetch(fullUrl, { ...options, signal: controller.signal });
       clearTimeout(timer);
       return res;
     } catch (e) {
@@ -76,23 +79,26 @@
   /* ── Health Check ───────────────────────────────────────────────────────── */
 
   async function _checkHealth() {
-    try {
-      const data = await _getJSON("/api/health");
-      if (data.model_loaded) {
-        _setStatus(true, "ML API: CONNECTED");
-        _updateFlaskModelTab(null);        // trigger model info fetch
-        console.info("[FlaskML] Backend connected — model source:", data.label_source);
-        return true;
-      } else {
-        _setStatus(false, "ML API: MODEL LOAD ERROR");
-        console.warn("[FlaskML] Backend reachable but model not loaded:", data.model_error);
-        return false;
-      }
-    } catch (_e) {
-      _setStatus(false, "ML API: OFFLINE");
-      console.info("[FlaskML] Backend not reachable — using local fallback.");
-      return false;
+    for (const base of CANDIDATE_URLS) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 2000);
+        const res = await fetch(base + "/api/health", { signal: controller.signal });
+        clearTimeout(timer);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.model_loaded) {
+            _activeBaseUrl = base;
+            _setStatus(true, "ML API: CONNECTED");
+            _updateFlaskModelTab(null);
+            console.info("[FlaskML] Connected to backend at:", base || "same-origin");
+            return true;
+          }
+        }
+      } catch (_) {}
     }
+    _setStatus(false, "ML API: OFFLINE");
+    return false;
   }
 
   /* ── Prediction ─────────────────────────────────────────────────────────── */
@@ -105,7 +111,7 @@
    * @returns {Promise<Object|null>}
    */
   async function predict(params) {
-    if (!_connected) return null;
+    if (!_connected && !(await _checkHealth())) return null;
     try {
       return await _postJSON("/api/predict", params);
     } catch (e) {
@@ -120,23 +126,40 @@
    * Send route parameters (from, to, date, route_coordinates) to Flask backend
    * for date-wise weather lookup + ML landslide risk analysis.
    *
-   * @param {Object} params - { from, to, date, route_coordinates }
+   * @param {Object} params - { from, to, date, route_coordinates, from_lat, from_lon, to_lat, to_lon }
    * @returns {Promise<Object|null>}
    */
   async function predictRouteRisk(params) {
-    if (!_connected) return null;
+    if (!_connected) {
+      await _checkHealth();
+    }
     try {
       return await _postJSON("/api/route-risk", params);
     } catch (e) {
       console.warn("[FlaskML] predictRouteRisk() failed:", e.message);
-      // Only propagate meaningful server-side errors (e.g. past-date rejection).
-      // Network failures / timeouts / AbortError are treated as offline → fall back.
+      // Try candidate URLs once if failed
+      for (const base of CANDIDATE_URLS) {
+        if (base === _activeBaseUrl) continue;
+        try {
+          const res = await fetch(base + "/api/route-risk", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(params),
+          });
+          if (res.ok) {
+            _activeBaseUrl = base;
+            _connected = true;
+            _setStatus(true, "ML API: CONNECTED");
+            return await res.json();
+          }
+        } catch (_) {}
+      }
       const isNetworkError = (
         e.name === "AbortError" ||
         e.message.includes("aborted") ||
         e.message.includes("Failed to fetch") ||
         e.message.includes("NetworkError") ||
-        e.message.startsWith("HTTP 5")  // 5xx = server error, not user error
+        e.message.startsWith("HTTP 5")
       );
       if (isNetworkError) return null;
       return { success: false, error: e.message };
